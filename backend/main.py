@@ -278,7 +278,7 @@ async def list_workflows():
             "completed_at": wf.get("completed_at"),
             "agent_count": len(wf["agents"]),
             "connection_count": len(wf["connections"]),
-            "agent_types": list(set(agent["type"] for agent in wf["agents"])),
+            "agent_types": list(set(agent.type for agent in wf["agents"])),
             "has_results": bool(wf.get("result")),
             "message_count": len(wf.get("result", {}).get("messages", [])) if wf.get("result") else 0,
             "error": wf.get("error")

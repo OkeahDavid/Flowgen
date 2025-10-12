@@ -20,7 +20,12 @@ import {
   CardContent,
   CardActions,
   CircularProgress,
-  Tooltip
+  Tooltip,
+  TextField,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
@@ -32,7 +37,11 @@ import {
   Schedule as ScheduleIcon,
   SmartToy as BotIcon,
   Person as PersonIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Download as ExportIcon,
+  Add as AddIcon,
+  Upload as UploadIcon,
+  Create as CreateIcon
 } from '@mui/icons-material';
 import { listWorkflows, getWorkflowStatus, deleteWorkflow } from '../services/apiTemp';
 
@@ -72,6 +81,18 @@ const WorkflowManagement: React.FC = () => {
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [workflowToDelete, setWorkflowToDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
+  const [importDialog, setImportDialog] = useState(false);
+  const [createDialog, setCreateDialog] = useState(false);
+  const [newWorkflowData, setNewWorkflowData] = useState<{
+    id: string;
+    task: string;
+    status: 'completed' | 'failed';
+  }>({
+    id: '',
+    task: '',
+    status: 'completed'
+  });
 
   const loadWorkflows = async () => {
     try {
@@ -110,6 +131,89 @@ const WorkflowManagement: React.FC = () => {
     } catch (err) {
       setError('Failed to delete workflow: ' + String(err));
     }
+  };
+
+  const handleExportWorkflow = async (workflowId: string) => {
+    try {
+      const response = await getWorkflowStatus(workflowId);
+      
+      // Create export data
+      const exportData = {
+        workflow_id: response.workflow_id,
+        status: response.status,
+        exported_at: new Date().toISOString(),
+        result: response.result
+      };
+
+      // Create and download JSON file
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `workflow_${workflowId}_${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+      
+    } catch (err) {
+      setError('Failed to export workflow: ' + String(err));
+    }
+  };
+
+  const handleImportWorkflow = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target?.result as string);
+        
+        // Validate the imported data structure
+        if (!importedData.workflow_id || !importedData.status) {
+          setError('Invalid workflow file format');
+          return;
+        }
+
+        // Create a new workflow entry from imported data
+        const newWorkflow: WorkflowSummary = {
+          id: importedData.workflow_id,
+          status: importedData.status,
+          task: importedData.result?.task || 'Imported workflow',
+          created_at: importedData.exported_at || new Date().toISOString(),
+          completed_at: importedData.status === 'completed' ? importedData.exported_at : undefined,
+          agent_count: importedData.result?.agent_count || 0
+        };
+
+        setWorkflows(prev => [newWorkflow, ...prev]);
+        setImportDialog(false);
+        
+      } catch {
+        setError('Failed to import workflow: Invalid JSON file');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCreateWorkflow = () => {
+    if (!newWorkflowData.id || !newWorkflowData.task) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    const newWorkflow: WorkflowSummary = {
+      id: newWorkflowData.id,
+      status: newWorkflowData.status,
+      task: newWorkflowData.task,
+      created_at: new Date().toISOString(),
+      completed_at: newWorkflowData.status === 'completed' ? new Date().toISOString() : undefined,
+      agent_count: 1
+    };
+
+    setWorkflows(prev => [newWorkflow, ...prev]);
+    setCreateDialog(false);
+    setNewWorkflowData({ id: '', task: '', status: 'completed' });
   };
 
   const getStatusIcon = (status: string) => {
@@ -182,14 +286,23 @@ const WorkflowManagement: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 600 }}>
           Workflow Management
         </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshIcon />}
-          onClick={loadWorkflows}
-          disabled={loading}
-        >
-          Refresh
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={(event) => setAddMenuAnchor(event.currentTarget)}
+          >
+            Add Workflow
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={loadWorkflows}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
+        </Stack>
       </Box>
 
       {error && (
@@ -269,6 +382,16 @@ const WorkflowManagement: React.FC = () => {
                     size="small"
                   >
                     <ViewIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Export Workflow">
+                  <IconButton 
+                    color="success" 
+                    onClick={() => handleExportWorkflow(workflow.id)}
+                    size="small"
+                    disabled={workflow.status !== 'completed'}
+                  >
+                    <ExportIcon />
                   </IconButton>
                 </Tooltip>
                 <Tooltip title="Delete Workflow">
@@ -458,6 +581,90 @@ const WorkflowManagement: React.FC = () => {
           >
             Delete
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Workflow Menu */}
+      <Menu
+        anchorEl={addMenuAnchor}
+        open={Boolean(addMenuAnchor)}
+        onClose={() => setAddMenuAnchor(null)}
+        PaperProps={{
+          sx: { borderRadius: 2, minWidth: 200 }
+        }}
+      >
+        <MenuItem onClick={() => { setImportDialog(true); setAddMenuAnchor(null); }}>
+          <ListItemIcon>
+            <UploadIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Import from File</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => { setCreateDialog(true); setAddMenuAnchor(null); }}>
+          <ListItemIcon>
+            <CreateIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Create Manually</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      {/* Import Dialog */}
+      <Dialog open={importDialog} onClose={() => setImportDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Import Workflow</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Select a JSON file exported from Flowgen to import a workflow.
+          </Typography>
+          <input
+            type="file"
+            accept=".json"
+            onChange={handleImportWorkflow}
+            style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportDialog(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Workflow Dialog */}
+      <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create Workflow Entry</DialogTitle>
+        <DialogContent>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <TextField
+              label="Workflow ID"
+              value={newWorkflowData.id}
+              onChange={(e) => setNewWorkflowData(prev => ({ ...prev, id: e.target.value }))}
+              fullWidth
+              required
+              helperText="Unique identifier for the workflow"
+            />
+            <TextField
+              label="Task Description"
+              value={newWorkflowData.task}
+              onChange={(e) => setNewWorkflowData(prev => ({ ...prev, task: e.target.value }))}
+              fullWidth
+              required
+              multiline
+              rows={3}
+              helperText="Description of what this workflow accomplishes"
+            />
+            <TextField
+              label="Status"
+              value={newWorkflowData.status}
+              onChange={(e) => setNewWorkflowData(prev => ({ ...prev, status: e.target.value as 'completed' | 'failed' }))}
+              select
+              fullWidth
+              required
+            >
+              <MenuItem value="completed">Completed</MenuItem>
+              <MenuItem value="failed">Failed</MenuItem>
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialog(false)}>Cancel</Button>
+          <Button onClick={handleCreateWorkflow} variant="contained">Create</Button>
         </DialogActions>
       </Dialog>
     </Box>
