@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -13,6 +13,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 # Local imports
 from agents import AGENT_CONFIGS, AgentConfig, Connection, build_workflow_team
+from document_processor import get_document_processor
 
 # Load environment variables
 load_dotenv()
@@ -218,6 +219,106 @@ async def delete_workflow(workflow_id: str):
     
     del workflows[workflow_id]
     return {"message": f"Workflow {workflow_id} deleted successfully"}
+
+@app.post("/upload-documents")
+async def upload_documents(files: List[UploadFile] = File(...)):
+    """Upload and process documents for vector search."""
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+    
+    results = []
+    
+    for file in files:
+        if not file.filename:
+            continue
+            
+        try:
+            # Read file content
+            file_content = await file.read()
+            
+            # Process and store the document
+            doc_processor = get_document_processor()
+            result = doc_processor.upload_document(file.filename, file_content)
+            
+            results.append({
+                "filename": file.filename,
+                "success": result["success"],
+                "message": result["message"],
+                "file_id": result.get("file_id"),
+                "chunks_added": result.get("chunks_added", 0),
+                "text_length": result.get("text_length", 0)
+            })
+            
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "message": f"Error processing file: {str(e)}",
+                "file_id": None,
+                "chunks_added": 0,
+                "text_length": 0
+            })
+    
+    # Count successful uploads
+    successful_uploads = sum(1 for r in results if r["success"])
+    total_chunks = sum(r["chunks_added"] for r in results)
+    
+    return {
+        "message": f"Processed {len(files)} files. {successful_uploads} successful uploads.",
+        "total_files": len(files),
+        "successful_uploads": successful_uploads,
+        "total_chunks_added": total_chunks,
+        "results": results
+    }
+
+@app.get("/documents/info")
+async def get_documents_info():
+    """Get information about stored documents."""
+    doc_processor = get_document_processor()
+    return doc_processor.get_document_info()
+
+@app.post("/documents/search")
+async def search_documents(request: Dict[str, Any]):
+    """Search documents using vector similarity."""
+    query = request.get("query", "")
+    max_results = request.get("max_results", 5)
+    filter_documents = request.get("filter_documents", None)  # Optional document filtering
+    
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    
+    doc_processor = get_document_processor()
+    
+    # If filter_documents is specified, check if those documents exist
+    if filter_documents:
+        doc_info = doc_processor.get_document_info()
+        available_docs = [doc["filename"] for doc in doc_info["documents"]]
+        missing_docs = [doc for doc in filter_documents if doc not in available_docs]
+        if missing_docs:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Some specified documents were not found: {missing_docs}. Available documents: {available_docs}"
+            )
+    
+    results = doc_processor.search_documents(query, max_results, filter_documents)
+    
+    return {
+        "query": query,
+        "results": results,
+        "total_results": len(results),
+        "filtered_documents": filter_documents
+    }
+
+@app.delete("/documents/clear")
+async def clear_all_documents():
+    """Clear all stored documents."""
+    doc_processor = get_document_processor()
+    success = doc_processor.clear_all_documents()
+    
+    if success:
+        return {"message": "All documents cleared successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to clear documents")
 
 if __name__ == "__main__":
     import uvicorn

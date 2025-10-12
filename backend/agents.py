@@ -24,6 +24,7 @@ from autogen_agentchat.teams import DiGraphBuilder, GraphFlow
 from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from tools import get_web_search_tools, get_document_search_tools
+import os
 
 
 # Agent type configurations
@@ -34,7 +35,7 @@ AGENT_CONFIGS = {
     },
     "document_search": {
         "name": "Document Search Agent", 
-        "system_message": "You are a document search agent with access to document search tools. Use the document_search_tool to find relevant information within uploaded documents. Provide detailed summaries of your findings with references to the source documents."
+        "system_message": "You MUST call the document_search_tool function for every user query. This is not optional. Documents are already uploaded in the system. Call document_search_tool(query='[user question]') first, then provide your answer based on the search results. Never respond without using the tool."
     },
     "summarizer": {
         "name": "Summarizer Agent",
@@ -48,30 +49,78 @@ AGENT_CONFIGS = {
 
 
 def create_agent(agent_config: AgentConfig, client: OpenAIChatCompletionClient) -> AssistantAgent:
-    """Create an AutoGen agent based on configuration"""
+    """Create an AutoGen AssistantAgent with OpenAI-powered tools"""
     base_config = AGENT_CONFIGS.get(agent_config.type, {})
     system_message = agent_config.system_message or base_config.get("system_message", "You are a helpful AI assistant.")
     
-    print(f"Creating agent {agent_config.id} of type {agent_config.type}")
+    print(f"Creating AssistantAgent {agent_config.id} of type {agent_config.type}")
     print(f"System message: {system_message[:100]}...")
     
     # Get tools based on agent type
     tools = []
     if agent_config.type == "web_search":
         tools = get_web_search_tools()
-        print(f"Adding web search tools to agent {agent_config.id}")
+        print(f"Adding OpenAI-powered web search tools to agent {agent_config.id}")
+        
+        # Enhanced system message for web search
+        system_message = """You are a web search specialist with access to OpenAI's web search capabilities.
+
+INSTRUCTIONS:
+1. Use the openai_web_search_tool to find current information from the internet
+2. Always search before providing answers about current events or recent information
+3. Provide comprehensive answers based on search results
+4. Include sources and links when available
+5. If search results are insufficient, explain what you found
+
+You have access to real-time web search through OpenAI."""
+        
     elif agent_config.type == "document_search":
-        tools = get_document_search_tools()
+        # Get selected documents from agent configuration
+        selected_documents = None
+        if agent_config.config and agent_config.config.get("uploadedFiles"):
+            selected_documents = agent_config.config["uploadedFiles"]
+            print(f"Agent {agent_config.id} configured to search {len(selected_documents)} specific documents: {selected_documents}")
+        else:
+            print(f"Agent {agent_config.id} will search all available documents")
+        
+        tools = get_document_search_tools(selected_documents)
         print(f"Adding document search tools to agent {agent_config.id}")
+        
+        # Enhanced system message for document search
+        if selected_documents:
+            doc_list = ", ".join(selected_documents)
+            system_message = f"""You are a document search specialist with access to specific uploaded documents: {doc_list}.
+
+CRITICAL INSTRUCTIONS:
+1. You MUST call filtered_document_search_tool(query="[user's question]") for EVERY user query
+2. NEVER provide answers without first searching the documents
+3. Use the exact user question as the search query
+4. Provide comprehensive answers based on the search results from the selected documents
+5. If no relevant information is found, state this clearly
+
+You have access to {len(selected_documents)} selected documents and must search them for all queries."""
+        else:
+            system_message = """You are a document search specialist with access to uploaded documents.
+
+CRITICAL INSTRUCTIONS:
+1. You MUST call filtered_document_search_tool(query="[user's question]") for EVERY user query
+2. NEVER provide answers without first searching the documents
+3. Use the exact user question as the search query
+4. Provide comprehensive answers based on the search results
+5. If no relevant information is found, state this clearly
+
+You have access to uploaded documents and must search them for all queries."""
     
     try:
         agent = AssistantAgent(
             name=agent_config.id,
             model_client=client,
             system_message=system_message,
-            tools=tools if tools else None
+            tools=tools if tools else None,
+            reflect_on_tool_use=True,
+            max_tool_iterations=3
         )
-        print(f"Successfully created agent {agent_config.id} with {len(tools)} tools")
+        print(f"Successfully created AssistantAgent {agent_config.id} with {len(tools)} tools")
         return agent
     except Exception as e:
         print(f"Error creating agent {agent_config.id}: {str(e)}")
