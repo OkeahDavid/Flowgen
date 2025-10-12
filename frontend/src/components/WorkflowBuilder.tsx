@@ -203,7 +203,7 @@ const WorkflowBuilder: React.FC = () => {
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Flowgen - AI Agent Workflow Builder
+            Flowgen
           </Typography>
           <Button
             color="inherit"
