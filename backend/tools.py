@@ -36,7 +36,7 @@ def openai_web_search_tool(query: str) -> str:
         
         # Use OpenAI's Responses API with web search tool
         response = client.responses.create(
-            model="gpt-4o",
+            model="o4-mini",
             tools=[{"type": "web_search"}],
             input=enhanced_query
         )
