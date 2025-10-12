@@ -1,11 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box,
   AppBar,
   Toolbar,
   Typography,
   Paper,
-  Grid,
   Button,
   TextField,
   Dialog,
@@ -18,14 +17,16 @@ import {
 } from '@mui/material';
 import {
   DndContext,
-  DragEndEvent,
-  DragStartEvent,
   DragOverlay,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+} from '@dnd-kit/core';
+import type {
+  DragEndEvent,
+  DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -34,11 +35,11 @@ import {
 } from '@dnd-kit/sortable';
 import { restrictToParentElement } from '@dnd-kit/modifiers';
 
-import AgentPalette from './AgentPalette';
-import WorkflowCanvas from './WorkflowCanvas';
-import WorkflowResults from './WorkflowResults';
-import type { AgentConfig, Connection, WorkflowRequest, WorkflowResponse } from '../types';
-import { createWorkflow, getWorkflowStatus } from '../services/api';
+import AgentPalette from './AgentPaletteTemp';
+import WorkflowCanvas from './WorkflowCanvasTemp';
+import WorkflowResults from './WorkflowResultsTemp';
+import type { AgentConfig, Connection, WorkflowRequest, WorkflowResponse } from '../typesTemp';
+import { createWorkflow, getWorkflowStatus } from '../services/apiTemp';
 
 const WorkflowBuilder: React.FC = () => {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
@@ -225,12 +226,12 @@ const WorkflowBuilder: React.FC = () => {
         onDragEnd={handleDragEnd}
         modifiers={[restrictToParentElement]}
       >
-        <Grid container sx={{ height: 'calc(100vh - 64px)' }}>
-          <Grid item xs={12} md={3}>
+        <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
+          <Box sx={{ width: '25%', borderRight: 1, borderColor: 'divider' }}>
             <AgentPalette />
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} md={6}>
+          <Box sx={{ width: '50%', borderRight: 1, borderColor: 'divider' }}>
             <Paper sx={{ height: '100%', position: 'relative' }}>
               <SortableContext items={agents.map(agent => agent.id)}>
                 <WorkflowCanvas
@@ -242,12 +243,12 @@ const WorkflowBuilder: React.FC = () => {
                 />
               </SortableContext>
             </Paper>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} md={3}>
+          <Box sx={{ width: '25%' }}>
             <WorkflowResults response={workflowResponse} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
 
         <DragOverlay>
           {activeId ? (
