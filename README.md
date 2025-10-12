@@ -50,7 +50,7 @@ A drag-and-drop interface for building and executing AI agent workflows using Au
 
 4. Run the backend server:
    ```bash
-   uv run python main.py
+   uv run main.py
    ```
 
 The backend will be available at `http://localhost:8000`
@@ -145,7 +145,7 @@ ENVIRONMENT=development
 ### Backend Development
 ```bash
 cd backend
-uv run python main.py
+uv run main.py
 ```
 
 ### Frontend Development
