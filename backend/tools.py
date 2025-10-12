@@ -10,40 +10,119 @@ from document_processor import get_document_processor
 
 def openai_web_search_tool(query: str) -> str:
     """
-    Use OpenAI's web search capability to search the web.
+    Use OpenAI's native web search capability via the Responses API.
     
     Args:
         query: The search query
         
     Returns:
-        Web search results from OpenAI
+        Web search results from OpenAI with citations
     """
     try:
-        print(f"Performing OpenAI web search for: {query}")
+        # Add current date context to the query for more relevant results
+        from datetime import datetime
+        current_date = datetime.now()
+        current_month_year = current_date.strftime("%B %Y")  # e.g., "October 2025"
+        current_full_date = current_date.strftime("%B %d, %Y")  # e.g., "October 12, 2025"
+        
+        # Enhance query with current date context
+        enhanced_query = f"{query} {current_month_year} recent news latest updates"
+        
+        print(f"Performing OpenAI web search for: {enhanced_query}")
+        print(f"Current date context: {current_full_date}")
         
         # Create OpenAI client
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Use OpenAI's chat completion with web search tool
-        response = client.chat.completions.create(
+        # Use OpenAI's Responses API with web search tool
+        response = client.responses.create(
             model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a web search assistant. Use web search to find current information and provide comprehensive results with sources."},
-                {"role": "user", "content": f"Search the web for: {query}"}
-            ],
             tools=[{"type": "web_search"}],
-            tool_choice="required"
+            input=enhanced_query
         )
         
-        # Extract the search results
-        if response.choices[0].message.tool_calls:
-            tool_call = response.choices[0].message.tool_calls[0]
-            return f"Web search results for '{query}':\n\n{tool_call.function.arguments}"
+        # Extract the response
+        if response.output_text:
+            formatted_result = f"Web search results for '{query}' (searched: {current_month_year}):\n\n{response.output_text}"
+            
+            # Add citation information if available
+            if hasattr(response, 'output') and response.output:
+                for item in response.output:
+                    if item.type == "message" and hasattr(item, 'content'):
+                        for content in item.content:
+                            if hasattr(content, 'annotations') and content.annotations:
+                                formatted_result += "\n\n📚 **Sources:**\n"
+                                for annotation in content.annotations:
+                                    if annotation.type == "url_citation":
+                                        formatted_result += f"- [{annotation.title}]({annotation.url})\n"
+            
+            formatted_result += f"\n\n🔍 Search completed using OpenAI's web search for {current_full_date}."
+            print(f"OpenAI web search completed successfully.")
+            return formatted_result
         else:
-            return response.choices[0].message.content or f"No web search results found for: {query}"
+            return f"No web search results found for: {query}"
         
     except Exception as e:
         error_msg = f"Error performing OpenAI web search: {str(e)}"
+        print(error_msg)
+        # Fallback to DuckDuckGo if OpenAI web search fails
+        return fallback_web_search_tool(query)
+
+
+def fallback_web_search_tool(query: str) -> str:
+    """
+    Fallback web search using DuckDuckGo search when OpenAI web search is unavailable.
+    
+    Args:
+        query: The search query
+        
+    Returns:
+        Web search results with titles, snippets, and URLs
+    """
+    try:
+        # Add current date context to the query
+        from datetime import datetime
+        current_date = datetime.now()
+        current_month_year = current_date.strftime("%B %Y")  # e.g., "October 2025"
+        
+        # Enhance query with current date context
+        enhanced_query = f"{query} {current_month_year} recent news latest"
+        
+        print(f"Performing fallback web search for: {enhanced_query}")
+        
+        from ddgs import DDGS
+        
+        # Perform web search using DuckDuckGo
+        with DDGS() as ddgs:
+            search_results = list(ddgs.text(enhanced_query, max_results=5))
+        
+        if not search_results:
+            return f"No web search results found for: {query}"
+        
+        # Format results
+        formatted_results = f"Web search results for '{query}' (searched: {current_month_year}):\n\n"
+        
+        for i, result in enumerate(search_results, 1):
+            title = result.get("title", "No title")
+            snippet = result.get("body", "No description")
+            url = result.get("href", "No URL")
+            
+            # Truncate very long snippets
+            if len(snippet) > 300:
+                snippet = snippet[:300] + "..."
+            
+            formatted_results += f"**Result {i}**\n"
+            formatted_results += f"*Title: {title}*\n"
+            formatted_results += f"*URL: {url}*\n"
+            formatted_results += f"{snippet}\n\n"
+        
+        formatted_results += f"🔍 Search completed: Found {len(search_results)} results from the web (fallback search for {current_month_year})."
+        
+        print(f"Fallback web search completed. Found {len(search_results)} results.")
+        return formatted_results
+        
+    except Exception as e:
+        error_msg = f"Error performing fallback web search: {str(e)}"
         print(error_msg)
         return error_msg
 

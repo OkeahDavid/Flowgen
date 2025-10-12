@@ -31,7 +31,7 @@ import os
 AGENT_CONFIGS = {
     "web_search": {
         "name": "Web Search Agent",
-        "system_message": "You are a web search agent with access to web search tools. When users ask for information, use the web_search_tool to find current information on the web. You can also use scrape_webpage_tool to get detailed content from specific URLs. Always use your tools to provide up-to-date and accurate information with sources."
+        "system_message": "You are a web search agent with access to current web search tools. When users ask for information, use the web search tool to find the most recent and up-to-date information from the internet. The search tool automatically includes current date context to ensure relevance. Always use your tools to provide current, accurate information with proper source citations."
     },
     "document_search": {
         "name": "Document Search Agent", 
@@ -63,16 +63,22 @@ def create_agent(agent_config: AgentConfig, client: OpenAIChatCompletionClient) 
         print(f"Adding OpenAI-powered web search tools to agent {agent_config.id}")
         
         # Enhanced system message for web search
-        system_message = """You are a web search specialist with access to OpenAI's web search capabilities.
+        from datetime import datetime
+        current_date = datetime.now().strftime("%B %d, %Y")
+        
+        system_message = f"""You are a web search specialist with access to current web search capabilities.
+
+CURRENT DATE: {current_date}
 
 INSTRUCTIONS:
-1. Use the openai_web_search_tool to find current information from the internet
-2. Always search before providing answers about current events or recent information
-3. Provide comprehensive answers based on search results
-4. Include sources and links when available
-5. If search results are insufficient, explain what you found
+1. Use the openai_web_search_tool to find the most current information from the internet
+2. The search tool automatically adds current date context to ensure recent results
+3. Always search before providing answers about current events or recent information
+4. Provide comprehensive answers based on the most recent search results
+5. Include sources and links when available
+6. If search results are insufficient, explain what you found
 
-You have access to real-time web search through OpenAI."""
+You have access to real-time web search that prioritizes current information."""
         
     elif agent_config.type == "document_search":
         # Get selected documents from agent configuration
