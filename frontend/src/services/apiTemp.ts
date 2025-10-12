@@ -113,3 +113,18 @@ export const listWorkflows = async () => {
     return [];
   }
 };
+
+export const deleteWorkflow = async (workflowId: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error deleting workflow:', error);
+    throw error;
+  }
+};

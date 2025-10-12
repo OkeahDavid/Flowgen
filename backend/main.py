@@ -10,7 +10,8 @@ from datetime import datetime
 # AutoGen imports
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.teams import DiGraphBuilder, GraphFlow
-from autogen_agentchat.conditions import MaxMessageTermination
+from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
+from autogen_agentchat.messages import TextMessage
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 # Load environment variables
@@ -74,6 +75,12 @@ def create_openai_client():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    # Validate API key format
+    if api_key.startswith("your_") or api_key == "your_openai_api_key_here":
+        raise HTTPException(status_code=500, detail="Please set a valid OpenAI API key in the .env file")
+    
+    print(f"Creating OpenAI client with API key: {api_key[:10]}...")
     return OpenAIChatCompletionClient(model="gpt-4o-mini", api_key=api_key)
 
 def create_agent(agent_config: AgentConfig, client: OpenAIChatCompletionClient) -> AssistantAgent:
@@ -81,50 +88,76 @@ def create_agent(agent_config: AgentConfig, client: OpenAIChatCompletionClient) 
     base_config = AGENT_CONFIGS.get(agent_config.type, {})
     system_message = agent_config.system_message or base_config.get("system_message", "You are a helpful AI assistant.")
     
-    return AssistantAgent(
-        name=agent_config.id,
-        model_client=client,
-        system_message=system_message
-    )
-
-def build_workflow_graph(agents: List[AgentConfig], connections: List[Connection], client: OpenAIChatCompletionClient):
-    """Build AutoGen GraphFlow from agent configuration"""
-    # Create agents
-    agent_instances = {}
-    for agent_config in agents:
-        agent_instances[agent_config.id] = create_agent(agent_config, client)
+    print(f"Creating agent {agent_config.id} of type {agent_config.type}")
+    print(f"System message: {system_message[:100]}...")
     
-    # Build graph
+    try:
+        agent = AssistantAgent(
+            name=agent_config.id,
+            model_client=client,
+            system_message=system_message
+        )
+        print(f"Successfully created agent {agent_config.id}")
+        return agent
+    except Exception as e:
+        print(f"Error creating agent {agent_config.id}: {str(e)}")
+        raise
+
+def build_workflow_team(agents: List[AgentConfig], connections: List[Connection], client: OpenAIChatCompletionClient):
+    """Build AutoGen GraphFlow team from agent configuration"""
+    # Create agents
+    agent_instances = []
+    agent_map = {}
+    
+    for agent_config in agents:
+        agent = create_agent(agent_config, client)
+        agent_instances.append(agent)
+        agent_map[agent_config.id] = agent
+    
+    if len(agent_instances) == 0:
+        raise ValueError("No agents provided for workflow")
+    
+    # Build the graph using DiGraphBuilder
     builder = DiGraphBuilder()
     
-    # Add nodes
-    for agent in agent_instances.values():
+    # Add all agents to the graph
+    for agent in agent_instances:
         builder.add_node(agent)
     
-    # Add edges
-    for connection in connections:
-        source_agent = agent_instances[connection.source_id]
-        target_agent = agent_instances[connection.target_id]
-        
-        if connection.condition:
-            builder.add_edge(source_agent, target_agent, condition=connection.condition)
-        else:
-            builder.add_edge(source_agent, target_agent)
+    # Add edges based on connections
+    if connections:
+        for connection in connections:
+            source_agent = agent_map.get(connection.source_id)
+            target_agent = agent_map.get(connection.target_id)
+            
+            if source_agent and target_agent:
+                print(f"Adding edge: {connection.source_id} -> {connection.target_id}")
+                # Add condition if specified
+                if connection.condition:
+                    builder.add_edge(source_agent, target_agent, condition=connection.condition)
+                else:
+                    builder.add_edge(source_agent, target_agent)
+            else:
+                print(f"Warning: Could not find agents for connection {connection.source_id} -> {connection.target_id}")
+    else:
+        # If no connections specified, create a sequential flow
+        for i in range(len(agent_instances) - 1):
+            builder.add_edge(agent_instances[i], agent_instances[i + 1])
     
-    # Build and validate graph
+    # Build and validate the graph
     graph = builder.build()
     
-    # Create flow
-    participants = list(agent_instances.values())
-    termination_condition = MaxMessageTermination(20)  # Max 20 messages
+    # Create termination condition
+    termination_condition = MaxMessageTermination(max_messages=20)
     
-    flow = GraphFlow(
-        participants=participants,
+    # Create the GraphFlow team
+    team = GraphFlow(
+        participants=builder.get_participants(),
         graph=graph,
         termination_condition=termination_condition
     )
     
-    return flow
+    return team, agent_instances
 
 @app.get("/")
 async def root():
@@ -148,8 +181,8 @@ async def create_workflow(request: WorkflowRequest):
         # Create OpenAI client
         client = create_openai_client()
         
-        # Build workflow graph
-        flow = build_workflow_graph(request.agents, request.connections, client)
+        # Build workflow team
+        team, agent_instances = build_workflow_team(request.agents, request.connections, client)
         
         # Store workflow info
         workflows[workflow_id] = {
@@ -159,11 +192,12 @@ async def create_workflow(request: WorkflowRequest):
             "connections": request.connections,
             "task": request.task,
             "created_at": datetime.now().isoformat(),
-            "flow": flow
+            "team": team,
+            "agent_instances": agent_instances
         }
         
         # Execute workflow asynchronously
-        asyncio.create_task(execute_workflow(workflow_id, flow, request.task))
+        asyncio.create_task(execute_workflow(workflow_id, team, request.task))
         
         return WorkflowResponse(
             workflow_id=workflow_id,
@@ -177,28 +211,40 @@ async def create_workflow(request: WorkflowRequest):
             error=str(e)
         )
 
-async def execute_workflow(workflow_id: str, flow: GraphFlow, task: str):
+async def execute_workflow(workflow_id: str, team, task: str):
     """Execute workflow asynchronously and store results"""
     try:
-        # Run the workflow
-        result = await flow.run(task=task)
+        print(f"Starting workflow execution for {workflow_id} with task: {task}")
         
-        # Store results
+        # Run the GraphFlow workflow using run_stream
+        messages = []
+        async for event in team.run_stream(task=task):
+            print(f"Workflow event: {event}")
+            messages.append(event)
+        
+        print(f"Workflow {workflow_id} completed successfully")
+        
+        # Store results - GraphFlow returns different event structure
         workflows[workflow_id]["status"] = "completed"
         workflows[workflow_id]["result"] = {
             "messages": [
                 {
-                    "source": msg.source,
-                    "content": msg.content,
-                    "type": msg.type,
-                    "models_usage": msg.models_usage.__dict__ if msg.models_usage else None
-                } for msg in result.messages
+                    "source": getattr(msg, 'source', 'unknown'),
+                    "content": getattr(msg, 'content', str(msg)),
+                    "type": getattr(msg, 'type', 'text'),
+                    "models_usage": getattr(msg, 'models_usage', None)
+                } for msg in messages
             ],
-            "stop_reason": result.stop_reason
+            "total_events": len(messages),
+            "stop_reason": "completed"
         }
         workflows[workflow_id]["completed_at"] = datetime.now().isoformat()
         
     except Exception as e:
+        print(f"Error in workflow {workflow_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         workflows[workflow_id]["status"] = "error"
         workflows[workflow_id]["error"] = str(e)
         workflows[workflow_id]["completed_at"] = datetime.now().isoformat()
@@ -220,18 +266,42 @@ async def get_workflow_status(workflow_id: str):
 
 @app.get("/workflows")
 async def list_workflows():
-    """List all workflows with their status"""
-    return [
-        {
+    """List all workflows with their status and enhanced details"""
+    workflow_list = []
+    
+    for wf in workflows.values():
+        workflow_info = {
             "id": wf["id"],
             "status": wf["status"],
             "task": wf["task"],
             "created_at": wf["created_at"],
             "completed_at": wf.get("completed_at"),
-            "agent_count": len(wf["agents"])
+            "agent_count": len(wf["agents"]),
+            "connection_count": len(wf["connections"]),
+            "agent_types": list(set(agent["type"] for agent in wf["agents"])),
+            "has_results": bool(wf.get("result")),
+            "message_count": len(wf.get("result", {}).get("messages", [])) if wf.get("result") else 0,
+            "error": wf.get("error")
         }
-        for wf in workflows.values()
-    ]
+        
+        # Calculate execution duration
+        if wf.get("completed_at"):
+            start_time = datetime.fromisoformat(wf["created_at"])
+            end_time = datetime.fromisoformat(wf["completed_at"])
+            duration_seconds = (end_time - start_time).total_seconds()
+            workflow_info["duration_seconds"] = duration_seconds
+        elif wf["status"] == "running":
+            start_time = datetime.fromisoformat(wf["created_at"])
+            current_time = datetime.now()
+            duration_seconds = (current_time - start_time).total_seconds()
+            workflow_info["duration_seconds"] = duration_seconds
+        
+        workflow_list.append(workflow_info)
+    
+    # Sort by creation time (newest first)
+    workflow_list.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return workflow_list
 
 @app.delete("/workflow/{workflow_id}")
 async def delete_workflow(workflow_id: str):
