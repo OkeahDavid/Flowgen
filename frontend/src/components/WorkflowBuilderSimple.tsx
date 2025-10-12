@@ -59,8 +59,14 @@ const WorkflowBuilder = () => {
   };
 
   return (
-    <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static">
+    <Box sx={{ 
+      width: '100vw', 
+      height: '100vh', 
+      display: 'flex', 
+      flexDirection: 'column',
+      overflow: 'hidden'
+    }}>
+      <AppBar position="static" sx={{ zIndex: 1000 }}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Flowgen - AI Agent Workflow Builder
@@ -78,13 +84,32 @@ const WorkflowBuilder = () => {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
-        <Box sx={{ width: '25%', borderRight: 1, borderColor: 'divider' }}>
+      <Box sx={{ 
+        flex: 1, 
+        display: 'flex',
+        width: '100%',
+        height: 'calc(100vh - 64px)',
+        overflow: 'hidden'
+      }}>
+        <Box sx={{ 
+          width: '300px', 
+          minWidth: '300px',
+          borderRight: 1, 
+          borderColor: 'divider',
+          height: '100%',
+          overflow: 'auto'
+        }}>
           <AgentPalette />
         </Box>
         
-        <Box sx={{ width: '50%', borderRight: 1, borderColor: 'divider' }}>
-          <Paper sx={{ height: '100%', position: 'relative' }}>
+        <Box sx={{ 
+          flex: 1,
+          borderRight: 1, 
+          borderColor: 'divider',
+          height: '100%',
+          overflow: 'hidden'
+        }}>
+          <Paper sx={{ height: '100%', position: 'relative', borderRadius: 0 }}>
             <WorkflowCanvas
               agents={agents}
               connections={connections}
@@ -95,7 +120,12 @@ const WorkflowBuilder = () => {
           </Paper>
         </Box>
         
-        <Box sx={{ width: '25%' }}>
+        <Box sx={{ 
+          width: '300px', 
+          minWidth: '300px',
+          height: '100%',
+          overflow: 'auto'
+        }}>
           <WorkflowResults response={workflowResponse} />
         </Box>
       </Box>
