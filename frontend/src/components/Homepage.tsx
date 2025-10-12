@@ -24,9 +24,10 @@ import {
 
 interface HomepageProps {
   onGetStarted: () => void;
+  onViewWorkflows?: () => void;
 }
 
-const Homepage = ({ onGetStarted }: HomepageProps) => {
+const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
   const theme = useTheme();
 
   const features = [
@@ -278,21 +279,43 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
             <Chip label="Real-time Results" variant="outlined" />
             <Chip label="AutoGen Powered" variant="outlined" />
           </Box>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={onGetStarted}
-            sx={{
-              mt: 4,
-              py: 1.5,
-              px: 4,
-              fontSize: '1.1rem',
-              borderRadius: 3,
-              textTransform: 'none',
-            }}
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap', mt: 4 }}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={onGetStarted}
+              sx={{
+                py: 1.5,
+                px: 4,
+                fontSize: '1.1rem',
+                borderRadius: 3,
+                textTransform: 'none',
+              }}
+            >
+              Launch Workflow Builder
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              onClick={onViewWorkflows || onGetStarted}
+              sx={{
+                py: 1.5,
+                px: 4,
+                fontSize: '1.1rem',
+                borderRadius: 3,
+                textTransform: 'none',
+              }}
+            >
+              View Stored Workflows
+            </Button>
+          </Box>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 2, fontStyle: 'italic' }}
           >
-            Launch Workflow Builder
-          </Button>
+            💡 Tip: Use the floating navigation button to switch between building workflows and viewing your execution results!
+          </Typography>
         </Paper>
       </Container>
       </Box>

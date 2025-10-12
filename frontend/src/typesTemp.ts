@@ -31,7 +31,28 @@ export interface WorkflowRequest {
   task: string;
 }
 
+export interface WorkflowMessage {
+  id?: string;
+  source: string;
+  content: string | object; // Can be string or object (e.g., tool calls)
+  timestamp?: string;
+  type?: 'user' | 'agent' | 'system';
+  models_usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+}
+
 export interface WorkflowResponse {
   workflow_id: string;
   status: string;
+  error?: string;
+  result?: {
+    messages?: WorkflowMessage[];
+    execution_time?: number;
+    agent_count?: number;
+    stop_reason?: string;
+    total_events?: number;
+    [key: string]: unknown;
+  };
 }

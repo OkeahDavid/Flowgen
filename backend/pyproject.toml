@@ -7,11 +7,14 @@ requires-python = ">=3.11"
 dependencies = [
     "autogen-agentchat>=0.7.0",
     "autogen-ext>=0.7.5",
+    "beautifulsoup4>=4.14.2",
+    "ddgs>=9.6.0",
     "fastapi>=0.119.0",
     "httpx>=0.28.1",
     "openai>=2.3.0",
     "pyautogen==0.2.35",
     "python-dotenv>=1.1.1",
     "python-multipart>=0.0.20",
+    "requests>=2.32.5",
     "uvicorn>=0.37.0",
 ]

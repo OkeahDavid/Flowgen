@@ -29,7 +29,8 @@ import {
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
-import { useDraggable } from '@dnd-kit/core';
+import { DndContext, useDraggable, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import type { AgentConfig, Connection } from '../typesTemp';
 
 // Agent-specific configuration components
@@ -904,6 +905,38 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 }) => {
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, delta } = event;
+    
+    if (active && delta) {
+      const agentId = active.id as string;
+      const agent = agents.find(a => a.id === agentId);
+      
+      if (agent && agent.position) {
+        const newPosition = {
+          x: agent.position.x + delta.x,
+          y: agent.position.y + delta.y
+        };
+        
+        // Ensure the agent stays within bounds
+        const boundedPosition = {
+          x: Math.max(0, Math.min(newPosition.x, 800)), // Adjust max width as needed
+          y: Math.max(0, Math.min(newPosition.y, 600))  // Adjust max height as needed
+        };
+        
+        onUpdateAgent(agentId, { position: boundedPosition });
+      }
+    }
+  };
+
   const handleStartConnection = (agentId: string) => {
     console.log('Starting connection from:', agentId);
     setConnectingFrom(agentId);
@@ -927,8 +960,12 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   return (
-    <Box 
-      onClick={handleCancelConnection}
+    <DndContext
+      sensors={sensors}
+      onDragEnd={handleDragEnd}
+    >
+      <Box 
+        onClick={handleCancelConnection}
       sx={{ 
         height: '100%', 
         width: '100%',
@@ -1212,7 +1249,8 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </Box>
         </>
       )}
-    </Box>
+      </Box>
+    </DndContext>
   );
 };
 

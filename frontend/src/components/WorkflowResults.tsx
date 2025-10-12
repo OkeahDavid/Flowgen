@@ -123,7 +123,10 @@ const WorkflowResults: React.FC<WorkflowResultsProps> = ({ response }) => {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                    {message.content}
+                    {typeof message.content === 'string' 
+                      ? message.content 
+                      : JSON.stringify(message.content, null, 2)
+                    }
                   </Typography>
                   {message.models_usage && (
                     <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Box,
   AppBar,
@@ -6,18 +6,60 @@ import {
   Typography,
   Paper,
   Button,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Snackbar,
+  Alert,
 } from '@mui/material';
+import {
+  AutoAwesome as BuilderIcon,
+  List as ManagementIcon,
+} from '@mui/icons-material';
 
 import AgentPalette from './AgentPaletteTemp';
 import WorkflowCanvas from './WorkflowCanvasTemp';
 import WorkflowResults from './WorkflowResultsTemp';
-import type { AgentConfig, Connection, WorkflowResponse } from '../typesTemp';
+import WorkflowManagement from './WorkflowManagementTemp';
+import type { AgentConfig, Connection, WorkflowResponse, WorkflowRequest } from '../typesTemp';
+import { createWorkflow, getWorkflowStatus } from '../services/apiTemp';
+import { workflowStorage } from '../services/localStorageTemp';
 
-const WorkflowBuilder = () => {
+interface WorkflowBuilderProps {
+  initialTab?: number;
+}
+
+const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
+  const [currentTab, setCurrentTab] = useState<number>(initialTab);
   const [workflowStatus, setWorkflowStatus] = useState<string>('idle');
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [workflowResponse, setWorkflowResponse] = useState<WorkflowResponse | null>(null);
+  const [task, setTask] = useState('');
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
+
+  // Update tab when initialTab prop changes
+  useEffect(() => {
+    setCurrentTab(initialTab);
+  }, [initialTab]);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setCurrentTab(newValue);
+  };
 
   const handleAddConnection = useCallback((sourceId: string, targetId: string) => {
     const newConnection: Connection = {
@@ -40,14 +82,134 @@ const WorkflowBuilder = () => {
     ));
   }, []);
 
-  const handleExecuteWorkflow = () => {
+  const handleAddAgent = useCallback(async (agentType: string) => {
+    const newAgent: AgentConfig = {
+      id: `${agentType}_${Date.now()}`,
+      type: agentType,
+      name: `${agentType.replace('_', ' ')} Agent`,
+      system_message: `You are a ${agentType.replace('_', ' ')} agent.`,
+      config: {},
+      position: { x: Math.random() * 400, y: Math.random() * 300 }
+    };
+    setAgents(prev => [...prev, newAgent]);
+  }, []);
+
+  const handleRemoveConnection = useCallback((sourceId: string, targetId: string) => {
+    setConnections(prev => prev.filter(conn => 
+      !(conn.source_id === sourceId && conn.target_id === targetId)
+    ));
+  }, []);
+
+  const pollWorkflowStatus = useCallback(async (workflowId: string) => {
+    const maxAttempts = 60; // Poll for 5 minutes max (every 5 seconds)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await getWorkflowStatus(workflowId);
+        setWorkflowResponse(response);
+        
+        if (response.status === 'completed' || response.status === 'failed') {
+          setWorkflowStatus(response.status);
+          
+          // Update local storage with final status and results
+          workflowStorage.updateWorkflowStatus(
+            workflowId, 
+            response.status, 
+            response.result, 
+            response.error
+          );
+          
+          return;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else {
+          setWorkflowStatus('timeout');
+          setSnackbar({
+            open: true,
+            message: 'Workflow polling timeout',
+            severity: 'warning',
+          });
+        }
+      } catch (error) {
+        console.error('Error polling workflow status:', error);
+        setWorkflowStatus('error');
+        setSnackbar({
+          open: true,
+          message: 'Error checking workflow status',
+          severity: 'error',
+        });
+      }
+    };
+
+    poll();
+  }, []);
+
+  const handleExecuteWorkflow = async () => {
+    if (agents.length === 0) {
+      setSnackbar({
+        open: true,
+        message: 'Please add at least one agent to the workflow',
+        severity: 'error',
+      });
+      return;
+    }
+
+    if (!task.trim()) {
+      setShowTaskDialog(true);
+      return;
+    }
+
+    setLoading(true);
     setWorkflowStatus('running');
-    console.log('Executing workflow...');
-    setWorkflowResponse({ workflow_id: 'demo_workflow', status: 'running' });
-    setTimeout(() => {
-      setWorkflowStatus('completed');
-      setWorkflowResponse({ workflow_id: 'demo_workflow', status: 'completed' });
-    }, 3000);
+    try {
+      const request: WorkflowRequest = {
+        agents,
+        connections,
+        task,
+      };
+
+      const response = await createWorkflow(request);
+      setWorkflowResponse(response);
+
+      // Save workflow to local storage
+      workflowStorage.saveWorkflow({
+        id: response.workflow_id,
+        task: task.trim(),
+        status: response.status,
+        created_at: new Date().toISOString(),
+        agents,
+        connections
+      });
+
+      // Poll for results if the workflow is running
+      if (response.status === 'running') {
+        pollWorkflowStatus(response.workflow_id);
+      }
+
+      setSnackbar({
+        open: true,
+        message: 'Workflow started successfully!',
+        severity: 'success',
+      });
+    } catch (error) {
+      setWorkflowStatus('idle');
+      setSnackbar({
+        open: true,
+        message: `Failed to start workflow: ${error}`,
+        severity: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTaskSubmit = () => {
+    setShowTaskDialog(false);
+    handleExecuteWorkflow();
   };
 
   const handleClearWorkflow = () => {
@@ -71,64 +233,145 @@ const WorkflowBuilder = () => {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Flowgen
           </Typography>
-          <Button
-            color="inherit"
-            onClick={handleExecuteWorkflow}
-            disabled={workflowStatus === 'running'}
-          >
-            {workflowStatus === 'running' ? 'Running...' : 'Execute Workflow'}
-          </Button>
-          <Button color="inherit" onClick={handleClearWorkflow} sx={{ ml: 1 }}>
-            Clear
-          </Button>
+          {currentTab === 0 && (
+            <>
+              <Button
+                color="inherit"
+                onClick={handleExecuteWorkflow}
+                disabled={loading || workflowStatus === 'running'}
+              >
+                {loading || workflowStatus === 'running' ? 'Running...' : 'Execute Workflow'}
+              </Button>
+              <Button color="inherit" onClick={handleClearWorkflow} sx={{ ml: 1 }}>
+                Clear
+              </Button>
+            </>
+          )}
+          {currentTab === 1 && (
+            <Button
+              color="inherit"
+              onClick={() => setCurrentTab(0)}
+              sx={{ ml: 1 }}
+            >
+              ← Back to Builder
+            </Button>
+          )}
         </Toolbar>
       </AppBar>
 
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+        <Tabs value={currentTab} onChange={handleTabChange} centered>
+          <Tab 
+            icon={<BuilderIcon />} 
+            label="Workflow Builder" 
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          />
+          <Tab 
+            icon={<ManagementIcon />} 
+            label="View All Workflows" 
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          />
+        </Tabs>
+      </Box>
+
+      {/* Tab Content */}
       <Box sx={{ 
         flex: 1, 
         display: 'flex',
         width: '100%',
-        height: 'calc(100vh - 64px)',
+        height: 'calc(100vh - 112px)', // Account for AppBar + Tabs
         overflow: 'hidden'
       }}>
-        <Box sx={{ 
-          width: '300px', 
-          minWidth: '300px',
-          borderRight: 1, 
-          borderColor: 'divider',
-          height: '100%',
-          overflow: 'auto'
-        }}>
-          <AgentPalette />
-        </Box>
-        
-        <Box sx={{ 
-          flex: 1,
-          borderRight: 1, 
-          borderColor: 'divider',
-          height: '100%',
-          overflow: 'hidden'
-        }}>
-          <Paper sx={{ height: '100%', position: 'relative', borderRadius: 0 }}>
-            <WorkflowCanvas
-              agents={agents}
-              connections={connections}
-              onAddConnection={handleAddConnection}
-              onRemoveAgent={handleRemoveAgent}
-              onUpdateAgent={handleUpdateAgent}
-            />
-          </Paper>
-        </Box>
-        
-        <Box sx={{ 
-          width: '300px', 
-          minWidth: '300px',
-          height: '100%',
-          overflow: 'auto'
-        }}>
-          <WorkflowResults response={workflowResponse} />
-        </Box>
+        {currentTab === 0 ? (
+          // Workflow Builder Tab
+          <>
+            <Box sx={{ 
+              width: '300px', 
+              minWidth: '300px',
+              borderRight: 1, 
+              borderColor: 'divider',
+              height: '100%',
+              overflow: 'auto'
+            }}>
+              <AgentPalette onAddAgent={handleAddAgent} />
+            </Box>
+            
+            <Box sx={{ 
+              flex: 1,
+              borderRight: 1, 
+              borderColor: 'divider',
+              height: '100%',
+              overflow: 'hidden'
+            }}>
+              <Paper sx={{ height: '100%', position: 'relative', borderRadius: 0 }}>
+                <WorkflowCanvas
+                  agents={agents}
+                  connections={connections}
+                  onAddConnection={handleAddConnection}
+                  onRemoveConnection={handleRemoveConnection}
+                  onRemoveAgent={handleRemoveAgent}
+                  onUpdateAgent={handleUpdateAgent}
+                />
+              </Paper>
+            </Box>
+            
+            <Box sx={{ 
+              width: '300px', 
+              minWidth: '300px',
+              height: '100%',
+              overflow: 'auto'
+            }}>
+              <WorkflowResults response={workflowResponse} onWorkflowUpdate={setWorkflowResponse} />
+            </Box>
+          </>
+        ) : (
+          // Workflow Management Tab
+          <Box sx={{ width: '100%', height: '100%' }}>
+            <WorkflowManagement />
+          </Box>
+        )}
       </Box>
+
+      {/* Task Input Dialog */}
+      <Dialog open={showTaskDialog} onClose={() => setShowTaskDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Enter Task Description</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Task Description"
+            fullWidth
+            multiline
+            rows={4}
+            variant="outlined"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            placeholder="Describe what you want the workflow to accomplish..."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowTaskDialog(false)}>Cancel</Button>
+          <Button onClick={handleTaskSubmit} variant="contained" disabled={!task.trim()}>Execute</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
