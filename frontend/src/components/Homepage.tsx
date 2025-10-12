@@ -69,28 +69,36 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', width: '100%' }}>
+    <Box sx={{ 
+      width: '100vw', 
+      height: '100vh', 
+      overflow: 'auto',
+      scrollBehavior: 'smooth'
+    }}>
       {/* Hero Section */}
       <Box
         sx={{
           background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.1)} 100%)`,
-          py: { xs: 8, md: 12 },
+          py: { xs: 4, md: 8 },
           position: 'relative',
-          overflow: 'hidden',
+          minHeight: { xs: '70vh', md: '80vh' },
+          display: 'flex',
+          alignItems: 'center',
         }}
       >
-        <Container maxWidth="lg">
-          <Box textAlign="center" mb={6}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
+          <Box textAlign="center">
             <Typography
               variant="h1"
               sx={{
-                fontSize: { xs: '2.5rem', md: '4rem' },
+                fontSize: { xs: '2rem', sm: '2.8rem', md: '3.5rem' },
                 fontWeight: 700,
                 background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
                 backgroundClip: 'text',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
-                mb: 2,
+                mb: 1,
+                lineHeight: 1.2,
               }}
             >
               Flowgen
@@ -98,11 +106,11 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
             <Typography
               variant="h4"
               sx={{
-                fontSize: { xs: '1.5rem', md: '2rem' },
+                fontSize: { xs: '1.2rem', sm: '1.5rem', md: '1.8rem' },
                 fontWeight: 400,
                 color: 'text.secondary',
-                mb: 3,
-                maxWidth: '800px',
+                mb: 2,
+                maxWidth: '700px',
                 mx: 'auto',
               }}
             >
@@ -111,15 +119,16 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
             <Typography
               variant="h6"
               sx={{
-                fontSize: { xs: '1.1rem', md: '1.3rem' },
+                fontSize: { xs: '0.9rem', sm: '1rem', md: '1.1rem' },
                 fontWeight: 300,
                 color: 'text.secondary',
-                mb: 4,
-                maxWidth: '600px',
+                mb: 3,
+                maxWidth: '500px',
                 mx: 'auto',
+                lineHeight: 1.4,
               }}
             >
-              Build, orchestrate, and execute complex AI agent workflows with an intuitive drag-and-drop interface powered by AutoGen GraphFlow
+              Build, orchestrate, and execute complex AI agent workflows with an intuitive drag-and-drop interface
             </Typography>
             <Button
               variant="contained"
@@ -128,9 +137,9 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
               startIcon={<PlayIcon />}
               endIcon={<ArrowIcon />}
               sx={{
-                py: 2,
-                px: 4,
-                fontSize: '1.2rem',
+                py: { xs: 1.5, md: 2 },
+                px: { xs: 3, md: 4 },
+                fontSize: { xs: '1rem', md: '1.2rem' },
                 borderRadius: 3,
                 textTransform: 'none',
                 boxShadow: theme.shadows[8],
@@ -148,15 +157,20 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
       </Box>
 
       {/* Features Section */}
-      <Container maxWidth="lg" sx={{ py: 8 }}>
-        <Typography
-          variant="h3"
-          textAlign="center"
-          gutterBottom
-          sx={{ mb: 6, fontWeight: 600 }}
-        >
-          Why Choose Flowgen?
-        </Typography>
+      <Box sx={{ py: { xs: 6, md: 8 }, bgcolor: 'background.paper' }}>
+        <Container maxWidth="lg" sx={{ px: { xs: 2, md: 3 } }}>
+          <Typography
+            variant="h2"
+            textAlign="center"
+            sx={{
+              fontSize: { xs: '1.8rem', md: '2.5rem' },
+              fontWeight: 600,
+              mb: 4,
+              color: 'text.primary',
+            }}
+          >
+            Powerful Features
+          </Typography>
         
         <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap', mb: 8, justifyContent: 'center' }}>
           {features.map((feature, index) => (
@@ -281,6 +295,7 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
           </Button>
         </Paper>
       </Container>
+      </Box>
 
       {/* Footer */}
       <Box
@@ -298,7 +313,7 @@ const Homepage = ({ onGetStarted }: HomepageProps) => {
             color="text.secondary"
             textAlign="center"
           >
-            © 2025 Flowgen - AI Agent Workflow Builder. Powered by AutoGen GraphFlow.
+            © 2025 Flowgen. Powered by AutoGen GraphFlow.
           </Typography>
         </Container>
       </Box>
