@@ -523,6 +523,15 @@ const AgentNode: React.FC<AgentNodeProps> = ({
           </IconButton>
         </Box>
 
+        {/* Document display for document_search agents */}
+        {agent.type === 'document_search' && agent.config?.uploadedFiles && agent.config.uploadedFiles.length > 0 && (
+          <Box sx={{ px: 2, pb: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              📄 {agent.config.uploadedFiles.length} document{agent.config.uploadedFiles.length !== 1 ? 's' : ''} uploaded
+            </Typography>
+          </Box>
+        )}
+
         {/* Connection handles - Output (right side) */}
         <button
           onClick={(e) => {
