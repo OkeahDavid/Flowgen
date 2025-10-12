@@ -4,6 +4,20 @@ export interface AgentConfig {
   type: string;
   system_message: string;
   position?: { x: number; y: number };
+  config?: {
+    // Web search config
+    searchQuery?: string;
+    maxResults?: number;
+    
+    // Document search config
+    uploadedFiles?: string[];
+    processingMode?: string;
+    
+    // Summarizer config
+    summaryType?: string;
+    summaryLength?: string;
+    focusAreas?: string[];
+  };
 }
 
 export interface Connection {
