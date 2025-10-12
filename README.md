@@ -8,7 +8,7 @@ A drag-and-drop interface for building and executing AI agent workflows using Au
 - **Three Agent Types**: Web Search, Document Search, and Summarizer agents
 - **Visual Workflow Design**: Connect agents with visual connections
 - **Real-time Execution**: Execute workflows and see results in real-time
-- **AutoGen Integration**: Powered by Microsoft's AutoGen framework with GraphFlow
+- AutoGen Integration**: Powered by Microsoft's AutoGen framework with [GraphFlow](https://microsoft.github.io/autogen/stable//user-guide/agentchat-user-guide/graph-flow.html)
 - **Material UI Design**: Clean, modern interface built with React and Material UI
 <img width="1914" height="900" alt="image" src="https://github.com/user-attachments/assets/78e0ee4f-af54-413f-b3ee-d9dec6a6bef6" />
 
