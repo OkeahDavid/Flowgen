@@ -37,7 +37,7 @@ import AgentPalette from './AgentPaletteTemp';
 import WorkflowCanvas from './WorkflowCanvasTemp';
 import WorkflowResults from './WorkflowResultsTemp';
 import type { AgentConfig, Connection, WorkflowRequest, WorkflowResponse } from '../typesTemp';
-import { createWorkflow, getWorkflowStatus } from '../services/apiTemp';
+import { createWorkflow, getWorkflowStatus, createAgentFromType } from '../services/apiTemp';
 
 const WorkflowBuilder: React.FC = () => {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
@@ -64,23 +64,51 @@ const WorkflowBuilder: React.FC = () => {
     setActiveId(event.active.id as string);
   }, []);
 
-  const handleAddAgent = useCallback((agentType: string) => {
-    setAgents(prev => {
-      const agentName = agentType.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+  const handleAddAgent = useCallback(async (agentType: string) => {
+    try {
+      const currentAgentCount = agents.length;
+      const position = { 
+        x: Math.max(50, Math.min(600, 100 + (currentAgentCount % 3) * 220)), 
+        y: Math.max(50, Math.min(400, 100 + Math.floor(currentAgentCount / 3) * 150))
+      };
       
+      // Create agent with backend configuration
+      const newAgent = await createAgentFromType(agentType, position);
+      
+      // Update name to include count
+      newAgent.name = `${newAgent.name} ${currentAgentCount + 1}`;
+      
+      setAgents(prev => [...prev, newAgent]);
+      
+      setSnackbar({
+        open: true,
+        message: `Added ${newAgent.name} with default configuration`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error adding agent:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to add agent. Using fallback configuration.',
+        severity: 'error'
+      });
+      
+      // Fallback to old method if backend fails
+      const agentName = agentType.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
       const newAgent: AgentConfig = {
         id: `agent_${Date.now()}`,
-        name: `${agentName} ${prev.length + 1}`,
+        name: `${agentName} ${agents.length + 1}`,
         type: agentType,
-        system_message: '',
+        system_message: 'You are a helpful AI assistant.',
         position: { 
-          x: Math.max(50, Math.min(600, 100 + (prev.length % 3) * 220)), 
-          y: Math.max(50, Math.min(400, 100 + Math.floor(prev.length / 3) * 150))
+          x: Math.max(50, Math.min(600, 100 + (agents.length % 3) * 220)), 
+          y: Math.max(50, Math.min(400, 100 + Math.floor(agents.length / 3) * 150))
         },
+        config: {}
       };
-      return [...prev, newAgent];
-    });
-  }, []);
+      setAgents(prev => [...prev, newAgent]);
+    }
+  }, [agents.length]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, delta } = event;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Box, 
   Typography, 
@@ -12,18 +12,319 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  alpha
+  alpha,
+  FormControl,
+  InputLabel,
+  Select,
+  Chip,
+  Stack,
+  Divider
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
 import {
   Search as SearchIcon,
   Description as DocumentIcon,
   Summarize as SummaryIcon,
   MoreVert as MoreVertIcon,
   Close as CloseIcon,
-  Link as LinkIcon,
+  CloudUpload as CloudUploadIcon,
 } from '@mui/icons-material';
 import { useDraggable } from '@dnd-kit/core';
 import type { AgentConfig, Connection } from '../typesTemp';
+
+// Agent-specific configuration components
+interface AgentConfigProps {
+  agent: AgentConfig;
+  onUpdate: (updates: Partial<AgentConfig>) => void;
+}
+
+const AgentWebSearchConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) => {
+  const [searchQuery, setSearchQuery] = useState(agent.config?.searchQuery || '');
+  const [maxResults, setMaxResults] = useState(agent.config?.maxResults || 10);
+
+  const handleQueryChange = (query: string) => {
+    setSearchQuery(query);
+    onUpdate({
+      config: {
+        ...agent.config,
+        searchQuery: query,
+        maxResults
+      }
+    });
+  };
+
+  const handleMaxResultsChange = (results: number) => {
+    setMaxResults(results);
+    onUpdate({
+      config: {
+        ...agent.config,
+        searchQuery,
+        maxResults: results
+      }
+    });
+  };
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Divider sx={{ mb: 2 }}>
+        <Chip label="Web Search Configuration" color="primary" size="small" />
+      </Divider>
+      
+      <TextField
+        fullWidth
+        label="Search Query"
+        variant="outlined"
+        value={searchQuery}
+        onChange={(e) => handleQueryChange(e.target.value)}
+        placeholder="Enter what you want to search for..."
+        sx={{ mb: 2 }}
+        helperText="Specify the search terms or query for this web search agent"
+      />
+      
+      <TextField
+        fullWidth
+        label="Maximum Results"
+        type="number"
+        variant="outlined"
+        value={maxResults}
+        onChange={(e) => handleMaxResultsChange(parseInt(e.target.value) || 10)}
+        inputProps={{ min: 1, max: 50 }}
+        sx={{ mb: 1 }}
+        helperText="Number of search results to retrieve (1-50)"
+      />
+    </Box>
+  );
+};
+
+const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) => {
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>(agent.config?.uploadedFiles || []);
+  const [processingMode, setProcessingMode] = useState(agent.config?.processingMode || 'extract_text');
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const fileNames = Array.from(files).map(file => file.name);
+      const updatedFiles = [...uploadedFiles, ...fileNames];
+      setUploadedFiles(updatedFiles);
+      onUpdate({
+        config: {
+          ...agent.config,
+          uploadedFiles: updatedFiles,
+          processingMode
+        }
+      });
+    }
+  };
+
+  const handleRemoveFile = (fileName: string) => {
+    const updatedFiles = uploadedFiles.filter(file => file !== fileName);
+    setUploadedFiles(updatedFiles);
+    onUpdate({
+      config: {
+        ...agent.config,
+        uploadedFiles: updatedFiles,
+        processingMode
+      }
+    });
+  };
+
+  const handleProcessingModeChange = (event: SelectChangeEvent) => {
+    const mode = event.target.value;
+    setProcessingMode(mode);
+    onUpdate({
+      config: {
+        ...agent.config,
+        uploadedFiles,
+        processingMode: mode
+      }
+    });
+  };
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Divider sx={{ mb: 2 }}>
+        <Chip label="Document Search Configuration" color="warning" size="small" />
+      </Divider>
+      
+      <Button
+        component="label"
+        variant="outlined"
+        startIcon={<CloudUploadIcon />}
+        sx={{ mb: 2, width: '100%' }}
+      >
+        Upload Documents
+        <input
+          type="file"
+          hidden
+          multiple
+          accept=".pdf,.doc,.docx,.txt,.md"
+          onChange={handleFileUpload}
+        />
+      </Button>
+
+      {uploadedFiles.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Uploaded Documents:</Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {uploadedFiles.map((fileName, index) => (
+              <Chip
+                key={index}
+                label={fileName}
+                onDelete={() => handleRemoveFile(fileName)}
+                color="primary"
+                variant="outlined"
+                sx={{ mb: 1 }}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
+
+      <FormControl fullWidth sx={{ mb: 1 }}>
+        <InputLabel>Processing Mode</InputLabel>
+        <Select
+          value={processingMode}
+          label="Processing Mode"
+          onChange={handleProcessingModeChange}
+        >
+          <MenuItem value="extract_text">Extract Text Only</MenuItem>
+          <MenuItem value="semantic_search">Semantic Search</MenuItem>
+          <MenuItem value="full_analysis">Full Document Analysis</MenuItem>
+        </Select>
+      </FormControl>
+    </Box>
+  );
+};
+
+const AgentSummarizerConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) => {
+  const [summaryType, setSummaryType] = useState(agent.config?.summaryType || 'results');
+  const [summaryLength, setSummaryLength] = useState(agent.config?.summaryLength || 'medium');
+  const [focusAreas, setFocusAreas] = useState<string[]>(agent.config?.focusAreas || []);
+  const [newFocusArea, setNewFocusArea] = useState('');
+
+  const handleSummaryTypeChange = (event: SelectChangeEvent) => {
+    const type = event.target.value;
+    setSummaryType(type);
+    onUpdate({
+      config: {
+        ...agent.config,
+        summaryType: type,
+        summaryLength,
+        focusAreas
+      }
+    });
+  };
+
+  const handleSummaryLengthChange = (event: SelectChangeEvent) => {
+    const length = event.target.value;
+    setSummaryLength(length);
+    onUpdate({
+      config: {
+        ...agent.config,
+        summaryType,
+        summaryLength: length,
+        focusAreas
+      }
+    });
+  };
+
+  const handleAddFocusArea = () => {
+    if (newFocusArea.trim() && !focusAreas.includes(newFocusArea.trim())) {
+      const updatedAreas = [...focusAreas, newFocusArea.trim()];
+      setFocusAreas(updatedAreas);
+      setNewFocusArea('');
+      onUpdate({
+        config: {
+          ...agent.config,
+          summaryType,
+          summaryLength,
+          focusAreas: updatedAreas
+        }
+      });
+    }
+  };
+
+  const handleRemoveFocusArea = (area: string) => {
+    const updatedAreas = focusAreas.filter(a => a !== area);
+    setFocusAreas(updatedAreas);
+    onUpdate({
+      config: {
+        ...agent.config,
+        summaryType,
+        summaryLength,
+        focusAreas: updatedAreas
+      }
+    });
+  };
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Divider sx={{ mb: 2 }}>
+        <Chip label="Summarizer Configuration" color="success" size="small" />
+      </Divider>
+      
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Summary Type</InputLabel>
+        <Select
+          value={summaryType}
+          label="Summary Type"
+          onChange={handleSummaryTypeChange}
+        >
+          <MenuItem value="results">Results Summary</MenuItem>
+          <MenuItem value="conversation">Conversation Summary</MenuItem>
+          <MenuItem value="document">Document Summary</MenuItem>
+          <MenuItem value="workflow">Workflow Summary</MenuItem>
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Summary Length</InputLabel>
+        <Select
+          value={summaryLength}
+          label="Summary Length"
+          onChange={handleSummaryLengthChange}
+        >
+          <MenuItem value="brief">Brief (1-2 sentences)</MenuItem>
+          <MenuItem value="medium">Medium (1 paragraph)</MenuItem>
+          <MenuItem value="detailed">Detailed (Multiple paragraphs)</MenuItem>
+          <MenuItem value="comprehensive">Comprehensive (Full analysis)</MenuItem>
+        </Select>
+      </FormControl>
+
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Focus Areas (Optional)</Typography>
+        <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+          <TextField
+            size="small"
+            placeholder="Add focus area..."
+            value={newFocusArea}
+            onChange={(e) => setNewFocusArea(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleAddFocusArea()}
+            sx={{ flex: 1 }}
+          />
+          <Button onClick={handleAddFocusArea} variant="outlined" size="small">
+            Add
+          </Button>
+        </Box>
+        {focusAreas.length > 0 && (
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {focusAreas.map((area, index) => (
+              <Chip
+                key={index}
+                label={area}
+                onDelete={() => handleRemoveFocusArea(area)}
+                color="success"
+                variant="outlined"
+                size="small"
+                sx={{ mb: 1 }}
+              />
+            ))}
+          </Stack>
+        )}
+      </Box>
+    </Box>
+  );
+};
 
 interface WorkflowCanvasProps {
   agents: AgentConfig[];
@@ -85,6 +386,12 @@ const AgentNode: React.FC<AgentNodeProps> = ({
   const [editName, setEditName] = useState(agent.name);
   const [editMessage, setEditMessage] = useState(agent.system_message);
 
+  // Update state when agent data changes
+  React.useEffect(() => {
+    setEditName(agent.name);
+    setEditMessage(agent.system_message);
+  }, [agent.name, agent.system_message]);
+
   const {
     attributes,
     listeners,
@@ -103,10 +410,12 @@ const AgentNode: React.FC<AgentNodeProps> = ({
   } : undefined;
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    console.log('Menu button clicked for agent:', agent.id);
     setAnchorEl(event.currentTarget);
   };
 
   const handleMenuClose = () => {
+    console.log('Menu closed for agent:', agent.id);
     setAnchorEl(null);
   };
 
@@ -169,49 +478,49 @@ const AgentNode: React.FC<AgentNodeProps> = ({
         }}
       >
         <Box 
-          {...listeners}
-          {...attributes}
           sx={{ 
             display: 'flex', 
             alignItems: 'center', 
             mb: 1,
-            cursor: 'grab',
-            '&:active': { cursor: 'grabbing' }
           }}
         >
-          <Box sx={{ color: agentColor, mr: 1 }}>
-            {getAgentIcon(agent.type)}
+          <Box 
+            {...listeners}
+            {...attributes}
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              flex: 1,
+              cursor: 'grab',
+              '&:active': { cursor: 'grabbing' },
+              mr: 1
+            }}
+          >
+            <Box sx={{ color: agentColor, mr: 1 }}>
+              {getAgentIcon(agent.type)}
+            </Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1, fontSize: '0.85rem' }}>
+              {agent.name}
+            </Typography>
           </Box>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1, fontSize: '0.85rem' }}>
-            {agent.name}
-          </Typography>
           <IconButton
             size="small"
-            onClick={handleMenuClick}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log('Three dots clicked!', agent.id);
+              handleMenuClick(e);
+            }}
             sx={{ 
               ml: 1,
-              '&:hover': { bgcolor: alpha(agentColor, 0.1) }
+              '&:hover': { bgcolor: alpha(agentColor, 0.1) },
+              zIndex: 100,
+              position: 'relative'
             }}
           >
             <MoreVertIcon fontSize="small" />
           </IconButton>
         </Box>
-        
-        {agent.system_message && (
-          <Typography 
-            variant="body2" 
-            color="text.secondary" 
-            sx={{ 
-              fontSize: '0.7rem',
-              fontStyle: 'italic',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            "{agent.system_message}"
-          </Typography>
-        )}
 
         {/* Connection handles - Output (right side) */}
         <button
@@ -342,52 +651,243 @@ const AgentNode: React.FC<AgentNodeProps> = ({
         )}
       </Paper>
 
-      {/* Context Menu */}
+      {/* Enhanced Context Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
+        sx={{
+          zIndex: 9999,
+          '& .MuiPaper-root': {
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            borderRadius: 3,
+            border: '1px solid rgba(0,0,0,0.05)',
+            minWidth: 200,
+            mt: 1,
+          }
+        }}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
       >
-        <MenuItem onClick={handleEdit}>
-          <LinkIcon sx={{ mr: 1, fontSize: 18 }} />
-          Edit Agent
+        <Box sx={{ px: 2, py: 1, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75rem' }}>
+            {agent.name}
+          </Typography>
+        </Box>
+        <MenuItem 
+          onClick={handleEdit}
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': { bgcolor: alpha(getAgentColor(agent.type), 0.08) }
+          }}
+        >
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            color: getAgentColor(agent.type),
+            width: '100%'
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+              bgcolor: alpha(getAgentColor(agent.type), 0.1),
+              mr: 2
+            }}>
+              {getAgentIcon(agent.type)}
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.25 }}>
+                Configure Agent
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Edit settings and system message
+              </Typography>
+            </Box>
+          </Box>
         </MenuItem>
-        <MenuItem onClick={handleRemove} sx={{ color: 'error.main' }}>
-          <CloseIcon sx={{ mr: 1, fontSize: 18 }} />
-          Remove Agent
+        <Divider sx={{ mx: 1 }} />
+        <MenuItem 
+          onClick={handleRemove} 
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': { bgcolor: alpha('#f44336', 0.08) }
+          }}
+        >
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            color: 'error.main',
+            width: '100%'
+          }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 1,
+              bgcolor: alpha('#f44336', 0.1),
+              mr: 2
+            }}>
+              <CloseIcon fontSize="small" />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.25 }}>
+                Remove Agent
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Delete from workflow
+              </Typography>
+            </Box>
+          </Box>
         </MenuItem>
       </Menu>
 
-      {/* Edit Dialog */}
-      <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Agent: {agent.type.replace('_', ' ')}</DialogTitle>
-        <DialogContent>
-          <TextField
-            margin="dense"
-            label="Agent Name"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            margin="dense"
-            label="System Message"
-            type="text"
-            fullWidth
-            multiline
-            rows={3}
-            variant="outlined"
-            value={editMessage}
-            onChange={(e) => setEditMessage(e.target.value)}
-            placeholder="Enter instructions for this agent..."
-          />
+      {/* Enhanced Edit Dialog */}
+      <Dialog 
+        open={editDialog} 
+        onClose={() => setEditDialog(false)} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 24px 72px rgba(0,0,0,0.15)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ 
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: 2,
+              bgcolor: alpha(getAgentColor(agent.type), 0.1),
+              color: getAgentColor(agent.type)
+            }}>
+              {getAgentIcon(agent.type)}
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+                Configure Agent
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {agent.type.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())} • ID: {agent.id.slice(-8)}
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+        
+        <DialogContent sx={{ px: 3, pb: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Basic Configuration Section */}
+            <Paper sx={{ p: 3, bgcolor: 'grey.50', borderRadius: 2, border: '1px solid', borderColor: 'grey.200' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: getAgentColor(agent.type) }} />
+                Basic Settings
+              </Typography>
+              
+              <TextField
+                label="Agent Name"
+                fullWidth
+                variant="outlined"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                sx={{ mb: 2 }}
+                helperText="A descriptive name for this agent in your workflow"
+              />
+              
+              <TextField
+                label="System Message"
+                fullWidth
+                multiline
+                rows={3}
+                variant="outlined"
+                value={editMessage}
+                onChange={(e) => setEditMessage(e.target.value)}
+                placeholder="Enter instructions for this agent..."
+                helperText={`This message defines the agent's role and behavior${agent.system_message ? ` (${agent.system_message.length} chars loaded from backend)` : ' (empty - backend may not be connected)'}`}
+                sx={{
+                  '& .MuiInputBase-root': {
+                    bgcolor: 'background.paper'
+                  }
+                }}
+              />
+            </Paper>
+
+            {/* Agent-specific configuration */}
+            {agent.type === 'web_search' && (
+              <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: alpha(getAgentColor(agent.type), 0.2) }}>
+                <AgentWebSearchConfig 
+                  agent={agent} 
+                  onUpdate={(updates) => {
+                    onUpdate(agent.id, updates);
+                  }}
+                />
+              </Paper>
+            )}
+
+            {agent.type === 'document_search' && (
+              <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: alpha(getAgentColor(agent.type), 0.2) }}>
+                <AgentDocumentConfig 
+                  agent={agent} 
+                  onUpdate={(updates) => {
+                    onUpdate(agent.id, updates);
+                  }}
+                />
+              </Paper>
+            )}
+
+            {agent.type === 'summarizer' && (
+              <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: alpha(getAgentColor(agent.type), 0.2) }}>
+                <AgentSummarizerConfig 
+                  agent={agent} 
+                  onUpdate={(updates) => {
+                    onUpdate(agent.id, updates);
+                  }}
+                />
+              </Paper>
+            )}
+          </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained">Save</Button>
+        
+        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1 }}>
+          <Button 
+            onClick={() => setEditDialog(false)}
+            variant="outlined"
+            sx={{ px: 3 }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSaveEdit} 
+            variant="contained" 
+            color="primary"
+            sx={{ 
+              px: 4,
+              background: `linear-gradient(135deg, ${getAgentColor(agent.type)}, ${alpha(getAgentColor(agent.type), 0.8)})`,
+              '&:hover': {
+                background: `linear-gradient(135deg, ${alpha(getAgentColor(agent.type), 0.9)}, ${alpha(getAgentColor(agent.type), 0.7)})`,
+              }
+            }}
+          >
+            Save Configuration
+          </Button>
         </DialogActions>
       </Dialog>
     </>

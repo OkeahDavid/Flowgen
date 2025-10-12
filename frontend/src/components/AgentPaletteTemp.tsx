@@ -16,13 +16,21 @@ interface AgentType {
 
 interface ClickableAgentItemProps {
   agent: AgentType;
-  onAddAgent: (agentType: string) => void;
+  onAddAgent: (agentType: string) => Promise<void>;
 }
 
 const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAgent }) => {
+  const handleClick = async () => {
+    try {
+      await onAddAgent(agent.id);
+    } catch (error) {
+      console.error('Error adding agent:', error);
+    }
+  };
+
   return (
     <Paper
-      onClick={() => onAddAgent(agent.id)}
+      onClick={handleClick}
       sx={{
         p: 2,
         border: `2px dashed ${alpha(agent.color, 0.3)}`,
@@ -58,7 +66,7 @@ const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAge
 };
 
 interface AgentPaletteProps {
-  onAddAgent: (agentType: string) => void;
+  onAddAgent: (agentType: string) => Promise<void>;
 }
 
 const AgentPalette: React.FC<AgentPaletteProps> = ({ onAddAgent }) => {
@@ -88,11 +96,11 @@ const AgentPalette: React.FC<AgentPaletteProps> = ({ onAddAgent }) => {
 
   return (
     <Box sx={{ height: '100%', p: 3, bgcolor: 'background.default' }}>
-      <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, borderBottom: 1, borderColor: 'divider', pb: 2, mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: 'text.secondary' }}>
         Agent Palette
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Click agents to add them to your workflow
+      <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary', fontSize: '0.85rem' }}>
+        Click to add agents to your workflow
       </Typography>
       
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
