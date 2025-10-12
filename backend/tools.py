@@ -1,137 +1,118 @@
 """
-Web search and document search tools for AutoGen agents.
+Web search and document search tools using OpenAI's APIs.
 """
 
-import requests
-from bs4 import BeautifulSoup
-from ddgs import DDGS
+import os
 from typing import List
+from openai import OpenAI
+from document_processor import get_document_processor
 
 
-def web_search_tool(query: str, max_results: int = 5) -> str:
+def openai_web_search_tool(query: str) -> str:
     """
-    Search the web using DuckDuckGo and return formatted results.
+    Use OpenAI's web search capability to search the web.
     
     Args:
         query: The search query
-        max_results: Maximum number of results to return
         
     Returns:
-        Formatted search results as a string
+        Web search results from OpenAI
     """
     try:
-        print(f"Performing web search for: {query}")
+        print(f"Performing OpenAI web search for: {query}")
         
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
-            
-        if not results:
-            return f"No results found for query: {query}"
-            
-        formatted_results = f"Web search results for '{query}':\n\n"
+        # Create OpenAI client
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        for i, result in enumerate(results, 1):
-            title = result.get('title', 'No title')
-            body = result.get('body', 'No description')
-            href = result.get('href', 'No URL')
-            
-            formatted_results += f"{i}. **{title}**\n"
-            formatted_results += f"   {body}\n"
-            formatted_results += f"   Source: {href}\n\n"
-            
-        print(f"Web search completed. Found {len(results)} results.")
-        return formatted_results
+        # Use OpenAI's chat completion with web search tool
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a web search assistant. Use web search to find current information and provide comprehensive results with sources."},
+                {"role": "user", "content": f"Search the web for: {query}"}
+            ],
+            tools=[{"type": "web_search"}],
+            tool_choice="required"
+        )
+        
+        # Extract the search results
+        if response.choices[0].message.tool_calls:
+            tool_call = response.choices[0].message.tool_calls[0]
+            return f"Web search results for '{query}':\n\n{tool_call.function.arguments}"
+        else:
+            return response.choices[0].message.content or f"No web search results found for: {query}"
         
     except Exception as e:
-        error_msg = f"Error performing web search: {str(e)}"
+        error_msg = f"Error performing OpenAI web search: {str(e)}"
         print(error_msg)
         return error_msg
 
 
-def scrape_webpage_tool(url: str) -> str:
+def document_search_tool(query: str = "", max_results: int = 5, filter_documents: List[str] = None) -> str:
     """
-    Scrape content from a webpage.
+    Search through uploaded documents using our existing vector search.
     
     Args:
-        url: The URL to scrape
+        query: The search query - pass the user's question directly here
+        max_results: Maximum number of results to return (default: 5)
+        filter_documents: Optional list of document filenames to search in (if None, searches all documents)
         
     Returns:
-        Scraped content as a string
+        Detailed search results from uploaded documents with content and relevance scores
     """
     try:
-        print(f"Scraping webpage: {url}")
+        print(f"Performing vector document search for: {query}")
+        if filter_documents:
+            print(f"Filtering search to documents: {filter_documents}")
         
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
+        # Get document processor instance
+        doc_processor = get_document_processor()
         
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        # Get document info to check if any documents are available
+        doc_info = doc_processor.get_document_info()
         
-        soup = BeautifulSoup(response.content, 'html.parser')
+        if doc_info["total_documents"] == 0:
+            return "No documents have been uploaded yet. Please upload documents first using the document upload feature."
         
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
-            
-        # Get text content
-        text = soup.get_text()
+        # If filter_documents is specified, check if those documents exist
+        if filter_documents:
+            available_docs = [doc["filename"] for doc in doc_info["documents"]]
+            missing_docs = [doc for doc in filter_documents if doc not in available_docs]
+            if missing_docs:
+                return f"Some specified documents were not found: {missing_docs}. Available documents: {available_docs}"
         
-        # Clean up text
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = ' '.join(chunk for chunk in chunks if chunk)
+        # Perform vector search with optional filtering
+        search_results = doc_processor.search_documents(query, max_results, filter_documents)
         
-        # Limit content length
-        if len(text) > 2000:
-            text = text[:2000] + "... [Content truncated]"
-            
-        print(f"Successfully scraped webpage. Content length: {len(text)}")
-        return f"Content from {url}:\n\n{text}"
+        if not search_results:
+            search_scope = f"the specified {len(filter_documents)} documents" if filter_documents else f"the {doc_info['total_documents']} uploaded documents"
+            return f"No relevant information found in {search_scope} for query: '{query}'. Try rephrasing your query or check if the information exists in your documents."
         
-    except Exception as e:
-        error_msg = f"Error scraping webpage {url}: {str(e)}"
-        print(error_msg)
-        return error_msg
-
-
-def document_search_tool(query: str, documents: List[str] = None) -> str:
-    """
-    Search through documents for relevant information.
-    
-    Args:
-        query: The search query
-        documents: List of document content to search through
-        
-    Returns:
-        Search results from documents
-    """
-    try:
-        print(f"Performing document search for: {query}")
-        
-        if not documents:
-            return "No documents provided for search. Please upload documents first."
-            
-        results = []
-        query_lower = query.lower()
-        
-        for i, doc in enumerate(documents):
-            if query_lower in doc.lower():
-                # Find sentences containing the query
-                sentences = doc.split('.')
-                relevant_sentences = [s.strip() for s in sentences if query_lower in s.lower()]
-                
-                if relevant_sentences:
-                    for sentence in relevant_sentences[:3]:  # Limit to 3 sentences per document
-                        results.append(f"Document {i+1}: {sentence}.")
-                        
-        if not results:
-            return f"No relevant information found in documents for query: {query}"
-            
+        # Format results with relevance scores
         formatted_results = f"Document search results for '{query}':\n\n"
-        formatted_results += "\n".join(results)
+        search_scope_text = f" (filtered to {len(filter_documents)} selected documents)" if filter_documents else ""
+        formatted_results += f"Found {len(search_results)} relevant passages{search_scope_text}:\n\n"
         
-        print(f"Document search completed. Found {len(results)} relevant passages.")
+        for i, result in enumerate(search_results, 1):
+            relevance_score = result.get("relevance_score", 0.0)
+            filename = result.get("filename", "Unknown")
+            content = result.get("content", "")
+            
+            # Truncate very long content
+            if len(content) > 300:
+                content = content[:300] + "..."
+            
+            formatted_results += f"**Result {i}** (Relevance: {relevance_score:.2f})\n"
+            formatted_results += f"*Source: {filename}*\n"
+            formatted_results += f"{content}\n\n"
+        
+        # Add summary info
+        if filter_documents:
+            formatted_results += f"📊 Search completed: Found {len(search_results)} relevant passages from {len(filter_documents)} selected documents."
+        else:
+            formatted_results += f"📊 Search completed: Found {len(search_results)} relevant passages from {doc_info['total_chunks']} total document chunks across {doc_info['total_documents']} uploaded documents."
+        
+        print(f"Vector document search completed. Found {len(search_results)} relevant passages.")
         return formatted_results
         
     except Exception as e:
@@ -142,9 +123,31 @@ def document_search_tool(query: str, documents: List[str] = None) -> str:
 
 def get_web_search_tools() -> List:
     """Get list of web search tools for agents"""
-    return [web_search_tool, scrape_webpage_tool]
+    return [openai_web_search_tool]
 
 
-def get_document_search_tools() -> List:
+def create_document_search_tool(filter_documents: List[str] = None):
+    """Create a document search tool with specific document filtering"""
+    def filtered_document_search_tool(query: str = "", max_results: int = 5) -> str:
+        """Search through selected uploaded documents using vector search."""
+        return document_search_tool(query, max_results, filter_documents)
+    
+    # Update the docstring to reflect the filtering
+    if filter_documents:
+        filtered_document_search_tool.__doc__ = f"""
+        Search through selected uploaded documents ({', '.join(filter_documents)}) using vector search.
+        
+        Args:
+            query: The search query - pass the user's question directly here
+            max_results: Maximum number of results to return (default: 5)
+            
+        Returns:
+            Detailed search results from the selected documents with content and relevance scores
+        """
+    
+    return filtered_document_search_tool
+
+
+def get_document_search_tools(filter_documents: List[str] = None) -> List:
     """Get list of document search tools for agents"""
-    return [document_search_tool]
+    return [create_document_search_tool(filter_documents)]

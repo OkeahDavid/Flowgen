@@ -158,11 +158,11 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
       return;
     }
 
-    if (!task.trim()) {
-      setShowTaskDialog(true);
-      return;
-    }
+    // Always show task dialog to allow editing the query
+    setShowTaskDialog(true);
+  };
 
+  const executeWorkflowWithTask = async () => {
     setLoading(true);
     setWorkflowStatus('running');
     try {
@@ -209,7 +209,7 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
 
   const handleTaskSubmit = () => {
     setShowTaskDialog(false);
-    handleExecuteWorkflow();
+    executeWorkflowWithTask();
   };
 
   const handleClearWorkflow = () => {
@@ -243,7 +243,7 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
                 {loading || workflowStatus === 'running' ? 'Running...' : 'Execute Workflow'}
               </Button>
               <Button color="inherit" onClick={handleClearWorkflow} sx={{ ml: 1 }}>
-                Clear
+                Clear Workflow
               </Button>
             </>
           )}
@@ -322,7 +322,11 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
               height: '100%',
               overflow: 'auto'
             }}>
-              <WorkflowResults response={workflowResponse} onWorkflowUpdate={setWorkflowResponse} />
+              <WorkflowResults 
+                response={workflowResponse} 
+                onWorkflowUpdate={setWorkflowResponse}
+                onClearResults={() => setWorkflowResponse(null)}
+              />
             </Box>
           </>
         ) : (

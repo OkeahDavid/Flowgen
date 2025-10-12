@@ -22,7 +22,8 @@ import {
   Person as PersonIcon,
   SmartToy as BotIcon,
   Refresh as RefreshIcon,
-  Visibility as ViewIcon
+  Visibility as ViewIcon,
+  Clear as ClearIcon
 } from '@mui/icons-material';
 import type { WorkflowResponse, WorkflowMessage } from '../typesTemp';
 import { getWorkflowStatus } from '../services/apiTemp';
@@ -30,9 +31,10 @@ import { getWorkflowStatus } from '../services/apiTemp';
 interface WorkflowResultsProps {
   response: WorkflowResponse | null;
   onWorkflowUpdate?: (updatedResponse: WorkflowResponse) => void;
+  onClearResults?: () => void;
 }
 
-const WorkflowResults = ({ response, onWorkflowUpdate }: WorkflowResultsProps) => {
+const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: WorkflowResultsProps) => {
   const [currentResponse, setCurrentResponse] = useState<WorkflowResponse | null>(response);
   const [polling, setPolling] = useState(false);
   const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
@@ -137,14 +139,28 @@ const WorkflowResults = ({ response, onWorkflowUpdate }: WorkflowResultsProps) =
           Workflow Results
         </Typography>
         {currentResponse?.workflow_id && (
-          <IconButton 
-            onClick={handleManualRefresh} 
-            size="small" 
-            disabled={polling}
-            title="Refresh status"
-          >
-            <RefreshIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <IconButton 
+              onClick={handleManualRefresh} 
+              size="small" 
+              disabled={polling}
+              title="Refresh status"
+            >
+              <RefreshIcon />
+            </IconButton>
+            {onClearResults && (
+              <IconButton 
+                onClick={() => {
+                  onClearResults();
+                  setCurrentResponse(null);
+                }} 
+                size="small"
+                title="Clear results"
+              >
+                <ClearIcon />
+              </IconButton>
+            )}
+          </Box>
         )}
       </Box>
 

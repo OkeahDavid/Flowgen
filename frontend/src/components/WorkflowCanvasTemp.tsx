@@ -18,7 +18,11 @@ import {
   Select,
   Chip,
   Stack,
-  Divider
+  Divider,
+  CircularProgress,
+  FormGroup,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import {
@@ -98,45 +102,119 @@ const AgentWebSearchConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =
 };
 
 const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) => {
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>(agent.config?.uploadedFiles || []);
-  const [processingMode, setProcessingMode] = useState(agent.config?.processingMode || 'extract_text');
+  const [selectedFiles, setSelectedFiles] = useState<string[]>(agent.config?.uploadedFiles || []);
+  const [availableDocuments, setAvailableDocuments] = useState<Array<{filename: string, chunk_count: number}>>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [isLoadingDocs, setIsLoadingDocs] = useState(false);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-      const fileNames = Array.from(files).map(file => file.name);
-      const updatedFiles = [...uploadedFiles, ...fileNames];
-      setUploadedFiles(updatedFiles);
-      onUpdate({
-        config: {
-          ...agent.config,
-          uploadedFiles: updatedFiles,
-          processingMode
-        }
-      });
+  // Load available documents on component mount
+  React.useEffect(() => {
+    loadAvailableDocuments();
+  }, []);
+
+  const loadAvailableDocuments = async () => {
+    setIsLoadingDocs(true);
+    try {
+      const response = await fetch('http://localhost:8000/documents/info');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableDocuments(data.documents || []);
+      } else {
+        console.error('Failed to load available documents');
+      }
+    } catch (error) {
+      console.error('Error loading documents:', error);
+    } finally {
+      setIsLoadingDocs(false);
     }
   };
 
-  const handleRemoveFile = (fileName: string) => {
-    const updatedFiles = uploadedFiles.filter(file => file !== fileName);
-    setUploadedFiles(updatedFiles);
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    setUploadStatus('Uploading and processing documents...');
+
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch('http://localhost:8000/upload-documents', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      // Update uploaded files list with successful uploads
+      const successfulFiles = result.results
+        .filter((r: { success: boolean; filename: string }) => r.success)
+        .map((r: { success: boolean; filename: string }) => r.filename);
+      
+      // Refresh available documents after upload
+      await loadAvailableDocuments();
+      
+      // Auto-select newly uploaded files
+      const updatedSelectedFiles = [...selectedFiles, ...successfulFiles];
+      setSelectedFiles(updatedSelectedFiles);
+      
+      onUpdate({
+        config: {
+          ...agent.config,
+          uploadedFiles: updatedSelectedFiles
+        }
+      });
+
+      const successCount = result.successful_uploads;
+      const totalCount = result.total_files;
+      
+      if (successCount === totalCount) {
+        setUploadStatus(`Successfully uploaded ${successCount} document(s) with ${result.total_chunks_added} text chunks created for vector search.`);
+      } else {
+        setUploadStatus(`Uploaded ${successCount}/${totalCount} documents. Check console for details on failed uploads.`);
+      }
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadStatus(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUploading(false);
+      // Clear status after 5 seconds
+      setTimeout(() => setUploadStatus(''), 5000);
+    }
+  };
+
+  const handleDocumentSelection = (fileName: string, selected: boolean) => {
+    let updatedFiles;
+    if (selected) {
+      updatedFiles = [...selectedFiles, fileName];
+    } else {
+      updatedFiles = selectedFiles.filter((file: string) => file !== fileName);
+    }
+    setSelectedFiles(updatedFiles);
     onUpdate({
       config: {
         ...agent.config,
-        uploadedFiles: updatedFiles,
-        processingMode
+        uploadedFiles: updatedFiles
       }
     });
   };
 
-  const handleProcessingModeChange = (event: SelectChangeEvent) => {
-    const mode = event.target.value;
-    setProcessingMode(mode);
+  const handleRemoveSelected = (fileName: string) => {
+    const updatedFiles = selectedFiles.filter((file: string) => file !== fileName);
+    setSelectedFiles(updatedFiles);
     onUpdate({
       config: {
         ...agent.config,
-        uploadedFiles,
-        processingMode: mode
+        uploadedFiles: updatedFiles
       }
     });
   };
@@ -151,48 +229,93 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
         component="label"
         variant="outlined"
         startIcon={<CloudUploadIcon />}
+        disabled={isUploading}
         sx={{ mb: 2, width: '100%' }}
       >
-        Upload Documents
+        {isUploading ? 'Processing...' : 'Upload Documents'}
         <input
           type="file"
           hidden
           multiple
           accept=".pdf,.doc,.docx,.txt,.md"
           onChange={handleFileUpload}
+          disabled={isUploading}
         />
       </Button>
 
-      {uploadedFiles.length > 0 && (
+      {uploadStatus && (
+        <Box sx={{ mb: 2, p: 1, bgcolor: 'info.light', borderRadius: 1 }}>
+          <Typography variant="body2" color="info.contrastText">
+            {uploadStatus}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Available Documents Selector */}
+      {isLoadingDocs ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <CircularProgress size={24} />
+          <Typography variant="body2" sx={{ ml: 1 }}>Loading documents...</Typography>
+        </Box>
+      ) : availableDocuments.length > 0 ? (
         <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Uploaded Documents:</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Available Documents ({availableDocuments.length}):
+          </Typography>
+          <FormGroup>
+            {availableDocuments.map((doc, index) => (
+              <FormControlLabel
+                key={index}
+                control={
+                  <Checkbox
+                    checked={selectedFiles.includes(doc.filename)}
+                    onChange={(e) => handleDocumentSelection(doc.filename, e.target.checked)}
+                    name={doc.filename}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2">{doc.filename}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {doc.chunk_count} text chunks
+                    </Typography>
+                  </Box>
+                }
+              />
+            ))}
+          </FormGroup>
+        </Box>
+      ) : (
+        <Box sx={{ mb: 2, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
+          <Typography variant="body2" color="warning.contrastText">
+            No documents available. Upload documents first to select them for this agent.
+          </Typography>
+        </Box>
+      )}
+
+      {/* Selected Documents Display */}
+      {selectedFiles.length > 0 && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Selected Documents ({selectedFiles.length}):
+          </Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap">
-            {uploadedFiles.map((fileName, index) => (
+            {selectedFiles.map((fileName, index) => (
               <Chip
                 key={index}
                 label={fileName}
-                onDelete={() => handleRemoveFile(fileName)}
+                onDelete={() => handleRemoveSelected(fileName)}
                 color="primary"
-                variant="outlined"
+                variant="filled"
                 sx={{ mb: 1 }}
               />
             ))}
           </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Agent will search only in the selected documents.
+          </Typography>
         </Box>
       )}
-
-      <FormControl fullWidth sx={{ mb: 1 }}>
-        <InputLabel>Processing Mode</InputLabel>
-        <Select
-          value={processingMode}
-          label="Processing Mode"
-          onChange={handleProcessingModeChange}
-        >
-          <MenuItem value="extract_text">Extract Text Only</MenuItem>
-          <MenuItem value="semantic_search">Semantic Search</MenuItem>
-          <MenuItem value="full_analysis">Full Document Analysis</MenuItem>
-        </Select>
-      </FormControl>
     </Box>
   );
 };
@@ -522,6 +645,15 @@ const AgentNode: React.FC<AgentNodeProps> = ({
             <MoreVertIcon fontSize="small" />
           </IconButton>
         </Box>
+
+        {/* Document display for document_search agents */}
+        {agent.type === 'document_search' && agent.config?.uploadedFiles && agent.config.uploadedFiles.length > 0 && (
+          <Box sx={{ px: 2, pb: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              📄 {agent.config.uploadedFiles.length} document{agent.config.uploadedFiles.length !== 1 ? 's' : ''} selected
+            </Typography>
+          </Box>
+        )}
 
         {/* Connection handles - Output (right side) */}
         <button
