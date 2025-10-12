@@ -243,7 +243,7 @@ const WorkflowResults = ({ response, onWorkflowUpdate }: WorkflowResultsProps) =
               <Stack spacing={2}>
                 {currentResponse.result.messages.map((message: WorkflowMessage, index: number) => {
                   // Filter out the raw result message that contains the full conversation dump
-                  if (message.source === 'unknown' && message.content.includes('messages=[')) {
+                  if (message.source === 'unknown' && typeof message.content === 'string' && message.content.includes('messages=[')) {
                     return null;
                   }
 
@@ -282,7 +282,10 @@ const WorkflowResults = ({ response, onWorkflowUpdate }: WorkflowResultsProps) =
                       <AccordionDetails sx={{ pt: 0 }}>
                         <Divider sx={{ mb: 2 }} />
                         <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                          {message.content}
+                          {typeof message.content === 'string' 
+                            ? message.content 
+                            : JSON.stringify(message.content, null, 2)
+                          }
                         </Typography>
                         {message.models_usage && (
                           <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>

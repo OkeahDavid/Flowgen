@@ -34,7 +34,7 @@ export interface WorkflowRequest {
 export interface WorkflowMessage {
   id?: string;
   source: string;
-  content: string;
+  content: string | object; // Can be string or object (e.g., tool calls)
   timestamp?: string;
   type?: 'user' | 'agent' | 'system';
   models_usage?: {

@@ -43,7 +43,7 @@ import {
   Upload as UploadIcon,
   Create as CreateIcon
 } from '@mui/icons-material';
-import { listWorkflows, getWorkflowStatus, deleteWorkflow } from '../services/apiTemp';
+import { workflowStorage } from '../services/localStorageTemp';
 
 interface WorkflowSummary {
   id: string;
@@ -94,11 +94,22 @@ const WorkflowManagement: React.FC = () => {
     status: 'completed'
   });
 
-  const loadWorkflows = async () => {
+  const loadWorkflows = () => {
     try {
       setLoading(true);
       setError(null);
-      const workflowList = await listWorkflows();
+      const storedWorkflows = workflowStorage.getAllWorkflows();
+      
+      // Convert StoredWorkflow to WorkflowSummary format
+      const workflowList = storedWorkflows.map(wf => ({
+        id: wf.id,
+        status: wf.status,
+        task: wf.task,
+        created_at: wf.created_at,
+        completed_at: wf.completed_at,
+        agent_count: wf.agents.length
+      }));
+      
       setWorkflows(workflowList);
     } catch (err) {
       setError('Failed to load workflows: ' + String(err));
@@ -112,37 +123,60 @@ const WorkflowManagement: React.FC = () => {
     loadWorkflows();
   }, []);
 
-  const handleViewWorkflow = async (workflowId: string) => {
+  const handleViewWorkflow = (workflowId: string) => {
     try {
-      const workflowDetails = await getWorkflowStatus(workflowId);
-      setSelectedWorkflow(workflowDetails);
-      setViewDialog(true);
+      const storedWorkflow = workflowStorage.getWorkflow(workflowId);
+      if (storedWorkflow) {
+        // Convert StoredWorkflow to DetailedWorkflowResponse format
+        const workflowDetails: DetailedWorkflowResponse = {
+          workflow_id: storedWorkflow.id,
+          status: storedWorkflow.status,
+          result: storedWorkflow.result as DetailedWorkflowResponse['result'],
+          error: storedWorkflow.error
+        };
+        setSelectedWorkflow(workflowDetails);
+        setViewDialog(true);
+      } else {
+        setError('Workflow not found');
+      }
     } catch (err) {
       setError('Failed to load workflow details: ' + String(err));
     }
   };
 
-  const handleDeleteWorkflow = async (workflowId: string) => {
+  const handleDeleteWorkflow = (workflowId: string) => {
     try {
-      await deleteWorkflow(workflowId);
-      setWorkflows(prev => prev.filter(w => w.id !== workflowId));
-      setDeleteDialog(false);
-      setWorkflowToDelete(null);
+      const success = workflowStorage.deleteWorkflow(workflowId);
+      if (success) {
+        setWorkflows(prev => prev.filter(w => w.id !== workflowId));
+        setDeleteDialog(false);
+        setWorkflowToDelete(null);
+      } else {
+        setError('Workflow not found');
+      }
     } catch (err) {
       setError('Failed to delete workflow: ' + String(err));
     }
   };
 
-  const handleExportWorkflow = async (workflowId: string) => {
+  const handleExportWorkflow = (workflowId: string) => {
     try {
-      const response = await getWorkflowStatus(workflowId);
+      const storedWorkflow = workflowStorage.getWorkflow(workflowId);
+      
+      if (!storedWorkflow) {
+        setError('Workflow not found');
+        return;
+      }
       
       // Create export data
       const exportData = {
-        workflow_id: response.workflow_id,
-        status: response.status,
+        workflow_id: storedWorkflow.id,
+        status: storedWorkflow.status,
         exported_at: new Date().toISOString(),
-        result: response.result
+        result: storedWorkflow.result,
+        task: storedWorkflow.task,
+        created_at: storedWorkflow.created_at,
+        completed_at: storedWorkflow.completed_at
       };
 
       // Create and download JSON file
@@ -177,16 +211,19 @@ const WorkflowManagement: React.FC = () => {
         }
 
         // Create a new workflow entry from imported data
-        const newWorkflow: WorkflowSummary = {
+        const importedWorkflow = {
           id: importedData.workflow_id,
           status: importedData.status,
-          task: importedData.result?.task || 'Imported workflow',
-          created_at: importedData.exported_at || new Date().toISOString(),
-          completed_at: importedData.status === 'completed' ? importedData.exported_at : undefined,
-          agent_count: importedData.result?.agent_count || 0
+          task: importedData.task || 'Imported workflow',
+          created_at: importedData.created_at || importedData.exported_at || new Date().toISOString(),
+          completed_at: importedData.completed_at,
+          agents: [], // Empty agents array for imported workflows
+          connections: [], // Empty connections array for imported workflows
+          result: importedData.result
         };
 
-        setWorkflows(prev => [newWorkflow, ...prev]);
+        workflowStorage.saveWorkflow(importedWorkflow);
+        loadWorkflows(); // Reload the workflows list
         setImportDialog(false);
         
       } catch {
@@ -202,16 +239,18 @@ const WorkflowManagement: React.FC = () => {
       return;
     }
 
-    const newWorkflow: WorkflowSummary = {
+    const newWorkflow = {
       id: newWorkflowData.id,
       status: newWorkflowData.status,
       task: newWorkflowData.task,
       created_at: new Date().toISOString(),
       completed_at: newWorkflowData.status === 'completed' ? new Date().toISOString() : undefined,
-      agent_count: 1
+      agents: [], // Empty agents array for manually created workflows
+      connections: [] // Empty connections array for manually created workflows
     };
 
-    setWorkflows(prev => [newWorkflow, ...prev]);
+    workflowStorage.saveWorkflow(newWorkflow);
+    loadWorkflows(); // Reload the workflows list
     setCreateDialog(false);
     setNewWorkflowData({ id: '', task: '', status: 'completed' });
   };
@@ -500,7 +539,10 @@ const WorkflowManagement: React.FC = () => {
                           <AccordionDetails sx={{ pt: 0 }}>
                             <Divider sx={{ mb: 2 }} />
                             <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                              {message.content}
+                              {typeof message.content === 'string' 
+                                ? message.content 
+                                : JSON.stringify(message.content, null, 2)
+                              }
                             </Typography>
                             {message.models_usage && (
                               <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
