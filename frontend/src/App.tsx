@@ -140,12 +140,7 @@ function App() {
               <ViewIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>
-              <Box>
-                <Box sx={{ fontWeight: 600 }}>View Workflows</Box>
-                <Box sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                  See execution results & manage
-                </Box>
-              </Box>
+              View Workflows
             </ListItemText>
           </MenuItem>
         </Menu>
