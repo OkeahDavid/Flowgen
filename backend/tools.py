@@ -51,12 +51,12 @@ def openai_web_search_tool(query: str) -> str:
                     if item.type == "message" and hasattr(item, 'content'):
                         for content in item.content:
                             if hasattr(content, 'annotations') and content.annotations:
-                                formatted_result += "\n\n📚 **Sources:**\n"
+                                formatted_result += "\n\n **Sources:**\n"
                                 for annotation in content.annotations:
                                     if annotation.type == "url_citation":
                                         formatted_result += f"- [{annotation.title}]({annotation.url})\n"
             
-            formatted_result += f"\n\n🔍 Search completed using OpenAI's web search for {current_full_date}."
+            formatted_result += f"\n\n Search completed using OpenAI's web search for {current_full_date}."
             print(f"OpenAI web search completed successfully.")
             return formatted_result
         else:
@@ -116,7 +116,7 @@ def fallback_web_search_tool(query: str) -> str:
             formatted_results += f"*URL: {url}*\n"
             formatted_results += f"{snippet}\n\n"
         
-        formatted_results += f"🔍 Search completed: Found {len(search_results)} results from the web (fallback search for {current_month_year})."
+        formatted_results += f" Search completed: Found {len(search_results)} results from the web (fallback search for {current_month_year})."
         
         print(f"Fallback web search completed. Found {len(search_results)} results.")
         return formatted_results
@@ -187,10 +187,10 @@ def document_search_tool(query: str = "", max_results: int = 5, filter_documents
         
         # Add summary info
         if filter_documents:
-            formatted_results += f"📊 Search completed: Found {len(search_results)} relevant passages from {len(filter_documents)} selected documents."
+            formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {len(filter_documents)} selected documents."
         else:
-            formatted_results += f"📊 Search completed: Found {len(search_results)} relevant passages from {doc_info['total_chunks']} total document chunks across {doc_info['total_documents']} uploaded documents."
-        
+            formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {doc_info['total_chunks']} total document chunks across {doc_info['total_documents']} uploaded documents."
+
         print(f"Vector document search completed. Found {len(search_results)} relevant passages.")
         return formatted_results
         
