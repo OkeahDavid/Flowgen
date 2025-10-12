@@ -106,40 +106,6 @@ The frontend will be available at `http://localhost:5173`
 - **Purpose**: Creates concise summaries of provided information
 - **Use Case**: Condensing information from other agents or external sources
 
-## API Endpoints
-
-### Backend API
-
-- `GET /` - Health check
-- `GET /health` - Detailed health status
-- `GET /agent-types` - Get available agent types
-- `POST /workflow/create` - Create and execute a workflow
-- `GET /workflow/{workflow_id}` - Get workflow status and results
-- `GET /workflows` - List all workflows
-- `DELETE /workflow/{workflow_id}` - Delete a workflow
-
-## Example Workflow
-
-1. **Web Search Agent** → Search for information about a topic
-2. **Document Search Agent** → Cross-reference with existing documents  
-3. **Summarizer Agent** → Create a comprehensive summary
-
-## Environment Variables
-
-```bash
-# OpenAI Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Backend Configuration  
-BACKEND_HOST=0.0.0.0
-BACKEND_PORT=8000
-
-# Frontend Configuration
-FRONTEND_URL=http://localhost:3000
-
-# Environment
-ENVIRONMENT=development
-```
 
 ## Development
 
@@ -169,18 +135,6 @@ cd frontend
 npm run build
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-1. **OpenAI API Key Error**: Ensure your API key is correctly set in the `.env` file
-2. **Connection Refused**: Make sure both backend and frontend servers are running
-3. **CORS Issues**: The backend is configured to allow requests from `http://localhost:3000` and `http://localhost:5173`
-
-### Logs
-
-- Backend logs are printed to console
-- Frontend development logs are available in browser dev tools
 
 ## Contributing
 
