@@ -3,24 +3,82 @@ import {
   Search as SearchIcon,
   Description as DocumentIcon,
   Summarize as SummaryIcon,
-  DragIndicator as DragIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 
-const AgentPalette = () => {
-  const agentTypes = [
+interface AgentType {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+}
+
+interface ClickableAgentItemProps {
+  agent: AgentType;
+  onAddAgent: (agentType: string) => void;
+}
+
+const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAgent }) => {
+  return (
+    <Paper
+      onClick={() => onAddAgent(agent.id)}
+      sx={{
+        p: 2,
+        border: `2px dashed ${alpha(agent.color, 0.3)}`,
+        borderRadius: 2,
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        '&:hover': {
+          borderColor: agent.color,
+          borderStyle: 'solid',
+          transform: 'translateY(-2px)',
+          boxShadow: `0 4px 12px ${alpha(agent.color, 0.2)}`,
+        },
+        '&:active': {
+          transform: 'translateY(0px)',
+          boxShadow: `0 2px 8px ${alpha(agent.color, 0.3)}`,
+        }
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <Box sx={{ color: agent.color, mr: 1 }}>
+          {agent.icon}
+        </Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1 }}>
+          {agent.name}
+        </Typography>
+        <AddIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+        {agent.description}
+      </Typography>
+    </Paper>
+  );
+};
+
+interface AgentPaletteProps {
+  onAddAgent: (agentType: string) => void;
+}
+
+const AgentPalette: React.FC<AgentPaletteProps> = ({ onAddAgent }) => {
+  const agentTypes: AgentType[] = [
     {
+      id: 'web_search',
       name: 'Web Search Agent',
       description: 'Search the web for information',
       icon: <SearchIcon />,
       color: '#2196f3',
     },
     {
+      id: 'document_search',
       name: 'Document Search Agent',
       description: 'Search through documents',
       icon: <DocumentIcon />,
       color: '#ff9800',
     },
     {
+      id: 'summarizer',
       name: 'Summarizer Agent',
       description: 'Summarize information',
       icon: <SummaryIcon />,
@@ -34,44 +92,12 @@ const AgentPalette = () => {
         Agent Palette
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Drag agents to the canvas to build your workflow
+        Click agents to add them to your workflow
       </Typography>
       
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {agentTypes.map((agent, index) => (
-          <Paper
-            key={index}
-            sx={{
-              p: 2,
-              border: `2px dashed ${alpha(agent.color, 0.3)}`,
-              borderRadius: 2,
-              cursor: 'grab',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                borderColor: agent.color,
-                borderStyle: 'solid',
-                transform: 'translateY(-2px)',
-                boxShadow: `0 4px 12px ${alpha(agent.color, 0.2)}`,
-              },
-              '&:active': {
-                cursor: 'grabbing',
-                transform: 'translateY(0px)',
-              }
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Box sx={{ color: agent.color, mr: 1 }}>
-                {agent.icon}
-              </Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1 }}>
-                {agent.name}
-              </Typography>
-              <DragIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-              {agent.description}
-            </Typography>
-          </Paper>
+        {agentTypes.map((agent) => (
+          <ClickableAgentItem key={agent.id} agent={agent} onAddAgent={onAddAgent} />
         ))}
       </Box>
 
@@ -80,10 +106,10 @@ const AgentPalette = () => {
           How to use:
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>
-          1. Drag agents to the canvas<br />
-          2. Connect agents to create flows<br />
-          3. Configure agent settings<br />
-          4. Execute your workflow
+          1. Click agents to add to canvas<br />
+          2. Drag agents to position them<br />
+          3. Click connection handles to link agents<br />
+          4. Configure and execute workflow
         </Typography>
       </Box>
     </Box>

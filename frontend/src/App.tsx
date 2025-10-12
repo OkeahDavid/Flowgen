@@ -4,7 +4,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { Box, Fab } from '@mui/material';
 import { Home as HomeIcon } from '@mui/icons-material';
 import Homepage from './components/Homepage';
-import WorkflowBuilder from './components/WorkflowBuilderSimple';
+import WorkflowBuilder from './components/WorkflowBuilder';
 
 const theme = createTheme({
   palette: {

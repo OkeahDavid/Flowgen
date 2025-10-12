@@ -18,7 +18,6 @@ import {
 import {
   DndContext,
   DragOverlay,
-  closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -30,10 +29,9 @@ import type {
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  arrayMove,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import { restrictToParentElement } from '@dnd-kit/modifiers';
+
 
 import AgentPalette from './AgentPaletteTemp';
 import WorkflowCanvas from './WorkflowCanvasTemp';
@@ -66,32 +64,47 @@ const WorkflowBuilder: React.FC = () => {
     setActiveId(event.active.id as string);
   }, []);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-
-    if (!over) return;
-
-    // Handle dropping from palette to canvas
-    if (active.data.current?.type === 'agent-type' && over.id === 'canvas') {
-      const agentType = active.data.current.agentType;
+  const handleAddAgent = useCallback((agentType: string) => {
+    setAgents(prev => {
+      const agentName = agentType.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+      
       const newAgent: AgentConfig = {
         id: `agent_${Date.now()}`,
-        name: `${agentType} ${agents.length + 1}`,
+        name: `${agentName} ${prev.length + 1}`,
         type: agentType,
         system_message: '',
-        position: { x: Math.random() * 400, y: Math.random() * 300 },
+        position: { 
+          x: Math.max(50, Math.min(600, 100 + (prev.length % 3) * 220)), 
+          y: Math.max(50, Math.min(400, 100 + Math.floor(prev.length / 3) * 150))
+        },
       };
-      setAgents(prev => [...prev, newAgent]);
-    }
+      return [...prev, newAgent];
+    });
+  }, []);
 
-    // Handle reordering agents in canvas
-    if (active.data.current?.type === 'agent' && over.data.current?.type === 'agent') {
-      const oldIndex = agents.findIndex(agent => agent.id === active.id);
-      const newIndex = agents.findIndex(agent => agent.id === over.id);
-      setAgents(prev => arrayMove(prev, oldIndex, newIndex));
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, delta } = event;
+    setActiveId(null);
+
+    // Handle moving agents within canvas
+    if (active.data.current?.type === 'agent' && delta) {
+      const agentId = active.id as string;
+      setAgents(prev => prev.map(agent => {
+        if (agent.id === agentId) {
+          const currentX = agent.position?.x || 0;
+          const currentY = agent.position?.y || 0;
+          return {
+            ...agent,
+            position: {
+              x: Math.max(0, Math.min(1000, currentX + delta.x)),
+              y: Math.max(0, Math.min(600, currentY + delta.y)),
+            }
+          };
+        }
+        return agent;
+      }));
     }
-  }, [agents]);
+  }, []);
 
   const handleAddConnection = useCallback((sourceId: string, targetId: string) => {
     const newConnection: Connection = {
@@ -99,6 +112,12 @@ const WorkflowBuilder: React.FC = () => {
       target_id: targetId,
     };
     setConnections(prev => [...prev, newConnection]);
+  }, []);
+
+  const handleRemoveConnection = useCallback((sourceId: string, targetId: string) => {
+    setConnections(prev => prev.filter(conn => 
+      !(conn.source_id === sourceId && conn.target_id === targetId)
+    ));
   }, []);
 
   const handleRemoveAgent = useCallback((agentId: string) => {
@@ -221,14 +240,12 @@ const WorkflowBuilder: React.FC = () => {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        modifiers={[restrictToParentElement]}
       >
         <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
           <Box sx={{ width: '25%', borderRight: 1, borderColor: 'divider' }}>
-            <AgentPalette />
+            <AgentPalette onAddAgent={handleAddAgent} />
           </Box>
           
           <Box sx={{ width: '50%', borderRight: 1, borderColor: 'divider' }}>
@@ -238,6 +255,7 @@ const WorkflowBuilder: React.FC = () => {
                   agents={agents}
                   connections={connections}
                   onAddConnection={handleAddConnection}
+                  onRemoveConnection={handleRemoveConnection}
                   onRemoveAgent={handleRemoveAgent}
                   onUpdateAgent={handleUpdateAgent}
                 />
@@ -254,18 +272,22 @@ const WorkflowBuilder: React.FC = () => {
           {activeId ? (
             <Box
               sx={{
-                width: 120,
+                width: 200,
                 height: 80,
-                bgcolor: 'primary.main',
+                bgcolor: 'rgba(33, 150, 243, 0.9)',
                 color: 'white',
                 borderRadius: 2,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 opacity: 0.8,
+                border: '2px solid white',
+                fontSize: 12,
+                fontWeight: 600,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
               }}
             >
-              {activeId}
+              Moving Agent...
             </Box>
           ) : null}
         </DragOverlay>
