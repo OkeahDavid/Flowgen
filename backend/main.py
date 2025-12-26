@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 # AutoGen imports
 from autogen_agentchat.messages import TextMessage
@@ -13,7 +14,11 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 # Local imports
 from agents import AGENT_CONFIGS, AgentConfig, Connection, build_workflow_team
-from document_processor import get_document_processor
+from document_service import get_document_processor
+from database import get_db, init_db, SessionLocal
+from api_routes import router as api_router
+from document_routes import router as doc_router
+from db_service import WorkflowService
 
 # Load environment variables
 load_dotenv()
@@ -67,6 +72,81 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include database API routes
+app.include_router(api_router)
+app.include_router(doc_router)
+
+# Keep old endpoints for compatibility
+@app.post("/upload-documents")
+async def upload_documents_compat(files: List[UploadFile] = File(...)):
+    """Legacy endpoint - redirects to new service."""
+    from document_service import get_document_processor
+    
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    doc_processor = get_document_processor(api_key)
+    results = []
+    
+    for file in files:
+        if not file.filename:
+            continue
+        
+        try:
+            content = await file.read()
+            result = doc_processor.upload_document(file.filename, content)
+            results.append({
+                "filename": file.filename,
+                "success": result["success"],
+                "message": result["message"],
+                "chunks_added": result.get("chunks_added", 0)
+            })
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "message": str(e),
+                "chunks_added": 0
+            })
+    
+    successful = sum(1 for r in results if r["success"])
+    total_chunks = sum(r["chunks_added"] for r in results)
+    
+    return {
+        "message": f"Uploaded {successful} of {len(results)} documents",
+        "results": results,
+        "total_chunks": total_chunks
+    }
+
+@app.get("/documents/info")
+async def get_documents_info_compat():
+    """Legacy endpoint - redirects to new service."""
+    from document_service import get_document_processor
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    doc_processor = get_document_processor(api_key)
+    documents = doc_processor.list_documents()
+    
+    return {"documents": documents}
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on application startup"""
+    try:
+        print("Initializing database...")
+        init_db()
+        print("✓ Database initialized successfully")
+    except Exception as e:
+        print(f"✗ Database initialization failed: {e}")
+        print("  The API will still run, but database features may not work")
+
 @app.get("/")
 async def root():
     return {"message": "Flowgen API is running"}
@@ -83,7 +163,7 @@ async def get_agent_types():
 @app.post("/workflow/create", response_model=WorkflowResponse)
 async def create_workflow(request: WorkflowRequest):
     """Create and execute a workflow with the specified agents and connections"""
-    workflow_id = f"workflow_{len(workflows) + 1}_{int(datetime.now().timestamp())}"
+    db = SessionLocal()
     
     try:
         # Create OpenAI client
@@ -92,7 +172,25 @@ async def create_workflow(request: WorkflowRequest):
         # Build workflow team
         team, agent_instances = build_workflow_team(request.agents, request.connections, client)
         
-        # Store workflow info
+        # Save workflow to database
+        workflow_data = {
+            "agents": [agent.dict() for agent in request.agents],
+            "connections": [conn.dict() for conn in request.connections],
+            "task": request.task
+        }
+        
+        db_workflow = WorkflowService.create_workflow(
+            db=db,
+            name=f"Workflow {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            description=f"Task: {request.task[:100]}...",
+            workflow_data=workflow_data,
+            tags=["auto-generated"],
+            status="running"
+        )
+        
+        workflow_id = str(db_workflow.id)
+        
+        # Store workflow info in memory (for execution)
         workflows[workflow_id] = {
             "id": workflow_id,
             "status": "running",
@@ -101,7 +199,8 @@ async def create_workflow(request: WorkflowRequest):
             "task": request.task,
             "created_at": datetime.now().isoformat(),
             "team": team,
-            "agent_instances": agent_instances
+            "agent_instances": agent_instances,
+            "db_id": db_workflow.id
         }
         
         # Execute workflow asynchronously
@@ -113,14 +212,38 @@ async def create_workflow(request: WorkflowRequest):
         )
         
     except Exception as e:
-        return WorkflowResponse(
-            workflow_id=workflow_id,
-            status="error",
-            error=str(e)
-        )
+        if 'workflow_id' in locals():
+            return WorkflowResponse(
+                workflow_id=workflow_id,
+                status="error",
+                error=str(e)
+            )
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 async def execute_workflow(workflow_id: str, team, task: str):
     """Execute workflow asynchronously and store results"""
+    db = SessionLocal()
+    started_at = datetime.now()
+    
+    def make_json_serializable(obj):
+        """Convert complex objects to JSON-serializable format."""
+        if obj is None:
+            return None
+        if isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, (list, tuple)):
+            return [make_json_serializable(item) for item in obj]
+        if isinstance(obj, dict):
+            return {k: make_json_serializable(v) for k, v in obj.items()}
+        if hasattr(obj, '__dict__'):
+            # Convert objects with attributes to dict
+            return {k: make_json_serializable(v) for k, v in obj.__dict__.items() if not k.startswith('_')}
+        # Fallback to string representation
+        return str(obj)
+    
     try:
         print(f"Starting workflow execution for {workflow_id} with task: {task}")
         
@@ -132,21 +255,63 @@ async def execute_workflow(workflow_id: str, team, task: str):
         
         print(f"Workflow {workflow_id} completed successfully")
         
-        # Store results - GraphFlow returns different event structure
-        workflows[workflow_id]["status"] = "completed"
-        workflows[workflow_id]["result"] = {
-            "messages": [
-                {
-                    "source": getattr(msg, 'source', 'unknown'),
-                    "content": getattr(msg, 'content', str(msg)),
-                    "type": getattr(msg, 'type', 'text'),
-                    "models_usage": getattr(msg, 'models_usage', None)
-                } for msg in messages
-            ],
+        # Format results with safe serialization
+        safe_messages = []
+        for msg in messages:
+            safe_msg = {
+                "source": str(getattr(msg, 'source', 'unknown')),
+                "content": str(getattr(msg, 'content', '')),
+                "type": str(getattr(msg, 'type', 'text'))
+            }
+            # Safely handle models_usage if it exists
+            if hasattr(msg, 'models_usage') and msg.models_usage:
+                try:
+                    safe_msg["models_usage"] = make_json_serializable(msg.models_usage)
+                except:
+                    safe_msg["models_usage"] = str(msg.models_usage)
+            safe_messages.append(safe_msg)
+        
+        result_data = {
+            "messages": safe_messages,
             "total_events": len(messages),
             "stop_reason": "completed"
         }
+        
+        # Store results in memory
+        workflows[workflow_id]["status"] = "completed"
+        workflows[workflow_id]["result"] = result_data
         workflows[workflow_id]["completed_at"] = datetime.now().isoformat()
+        
+        # Save execution to database with safe serialization
+        from uuid import UUID
+        safe_execution_log = []
+        for msg in messages[:50]:  # Limit log size
+            try:
+                safe_execution_log.append({
+                    "source": str(getattr(msg, 'source', 'unknown')),
+                    "content": str(getattr(msg, 'content', ''))[:500],  # Truncate long content
+                    "type": str(getattr(msg, 'type', 'text'))
+                })
+            except:
+                safe_execution_log.append({"event": str(msg)[:500]})
+        
+        WorkflowService.record_execution(
+            db=db,
+            workflow_id=UUID(workflow_id),
+            status="completed",
+            started_at=started_at,
+            completed_at=datetime.now(),
+            input_data={"task": task},
+            output_data=result_data,
+            execution_log=safe_execution_log
+        )
+        
+        # Update workflow status to completed
+        WorkflowService.update_workflow(
+            db=db,
+            workflow_id=UUID(workflow_id),
+            status="completed"
+        )
         
     except Exception as e:
         print(f"Error in workflow {workflow_id}: {str(e)}")
@@ -156,6 +321,32 @@ async def execute_workflow(workflow_id: str, team, task: str):
         workflows[workflow_id]["status"] = "error"
         workflows[workflow_id]["error"] = str(e)
         workflows[workflow_id]["completed_at"] = datetime.now().isoformat()
+        
+        # Save error to database
+        try:
+            from uuid import UUID
+            db.rollback()  # Rollback any failed transaction first
+            WorkflowService.record_execution(
+                db=db,
+                workflow_id=UUID(workflow_id),
+                status="failed",
+                started_at=started_at,
+                completed_at=datetime.now(),
+                input_data={"task": task},
+                error_message=str(e)
+            )
+            
+            # Update workflow status to failed
+            WorkflowService.update_workflow(
+                db=db,
+                workflow_id=UUID(workflow_id),
+                status="failed"
+            )
+        except Exception as db_error:
+            print(f"Failed to save error to database: {db_error}")
+            db.rollback()
+    finally:
+        db.close()
 
 @app.get("/workflow/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow_status(workflow_id: str):

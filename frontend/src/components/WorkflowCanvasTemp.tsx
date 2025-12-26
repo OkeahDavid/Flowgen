@@ -32,6 +32,7 @@ import {
   MoreVert as MoreVertIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { DndContext, useDraggable, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
@@ -103,7 +104,7 @@ const AgentWebSearchConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =
 
 const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) => {
   const [selectedFiles, setSelectedFiles] = useState<string[]>(agent.config?.uploadedFiles || []);
-  const [availableDocuments, setAvailableDocuments] = useState<Array<{filename: string, chunk_count: number}>>([]);
+  const [availableDocuments, setAvailableDocuments] = useState<Array<{id: string, filename: string, chunk_count: number}>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
@@ -219,6 +220,42 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
     });
   };
 
+  const handleDeleteDocument = async (docId: string, fileName: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/documents/${docId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete failed: ${response.statusText}`);
+      }
+
+      // Remove from selected files if it was selected
+      const updatedFiles = selectedFiles.filter((file: string) => file !== fileName);
+      setSelectedFiles(updatedFiles);
+      onUpdate({
+        config: {
+          ...agent.config,
+          uploadedFiles: updatedFiles
+        }
+      });
+
+      // Refresh available documents list
+      await loadAvailableDocuments();
+      
+      setUploadStatus(`Successfully deleted "${fileName}"`);
+      setTimeout(() => setUploadStatus(''), 3000);
+    } catch (error) {
+      console.error('Delete error:', error);
+      setUploadStatus(`Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setTimeout(() => setUploadStatus(''), 5000);
+    }
+  };
+
   return (
     <Box sx={{ mt: 2 }}>
       <Divider sx={{ mb: 2 }}>
@@ -264,24 +301,34 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
           </Typography>
           <FormGroup>
             {availableDocuments.map((doc, index) => (
-              <FormControlLabel
-                key={index}
-                control={
-                  <Checkbox
-                    checked={selectedFiles.includes(doc.filename)}
-                    onChange={(e) => handleDocumentSelection(doc.filename, e.target.checked)}
-                    name={doc.filename}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2">{doc.filename}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {doc.chunk_count} text chunks
-                    </Typography>
-                  </Box>
-                }
-              />
+              <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={selectedFiles.includes(doc.filename)}
+                      onChange={(e) => handleDocumentSelection(doc.filename, e.target.checked)}
+                      name={doc.filename}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2">{doc.filename}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {doc.chunk_count} text chunks
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ flexGrow: 1 }}
+                />
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => handleDeleteDocument(doc.id, doc.filename)}
+                  title="Delete document"
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
             ))}
           </FormGroup>
         </Box>

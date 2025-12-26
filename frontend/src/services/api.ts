@@ -39,3 +39,8 @@ export const healthCheck = async () => {
   const response = await api.get('/health');
   return response.data;
 };
+
+export const deleteDocument = async (filename: string) => {
+  const response = await api.delete(`/documents/${encodeURIComponent(filename)}`);
+  return response.data;
+};

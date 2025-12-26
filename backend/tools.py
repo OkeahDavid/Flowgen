@@ -5,7 +5,7 @@ Web search and document search tools using OpenAI's APIs.
 import os
 from typing import List
 from openai import OpenAI
-from document_processor import get_document_processor
+from document_service import get_document_processor
 
 
 def openai_web_search_tool(query: str) -> str:
@@ -144,18 +144,24 @@ def document_search_tool(query: str = "", max_results: int = 5, filter_documents
         if filter_documents:
             print(f"Filtering search to documents: {filter_documents}")
         
+        # Get OpenAI API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return "Error: OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable."
+        
         # Get document processor instance
-        doc_processor = get_document_processor()
+        doc_processor = get_document_processor(api_key)
         
-        # Get document info to check if any documents are available
-        doc_info = doc_processor.get_document_info()
+        # Get document list
+        doc_info = doc_processor.list_documents()
+        documents = doc_info.get("documents", [])
         
-        if doc_info["total_documents"] == 0:
+        if not documents:
             return "No documents have been uploaded yet. Please upload documents first using the document upload feature."
         
         # If filter_documents is specified, check if those documents exist
         if filter_documents:
-            available_docs = [doc["filename"] for doc in doc_info["documents"]]
+            available_docs = [doc["filename"] for doc in documents]
             missing_docs = [doc for doc in filter_documents if doc not in available_docs]
             if missing_docs:
                 return f"Some specified documents were not found: {missing_docs}. Available documents: {available_docs}"
@@ -164,7 +170,7 @@ def document_search_tool(query: str = "", max_results: int = 5, filter_documents
         search_results = doc_processor.search_documents(query, max_results, filter_documents)
         
         if not search_results:
-            search_scope = f"the specified {len(filter_documents)} documents" if filter_documents else f"the {doc_info['total_documents']} uploaded documents"
+            search_scope = f"the specified {len(filter_documents)} documents" if filter_documents else f"{len(documents)} uploaded documents"
             return f"No relevant information found in {search_scope} for query: '{query}'. Try rephrasing your query or check if the information exists in your documents."
         
         # Format results with relevance scores
@@ -177,19 +183,20 @@ def document_search_tool(query: str = "", max_results: int = 5, filter_documents
             filename = result.get("filename", "Unknown")
             content = result.get("content", "")
             
-            # Truncate very long content
-            if len(content) > 300:
-                content = content[:300] + "..."
+            # Truncate very long content (increased from 300 to 2000 for better context)
+            if len(content) > 2000:
+                content = content[:2000] + "..."
             
             formatted_results += f"**Result {i}** (Relevance: {relevance_score:.2f})\n"
             formatted_results += f"*Source: {filename}*\n"
             formatted_results += f"{content}\n\n"
         
         # Add summary info
+        total_chunks = sum(doc.get("chunk_count", 0) for doc in documents)
         if filter_documents:
             formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {len(filter_documents)} selected documents."
         else:
-            formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {doc_info['total_chunks']} total document chunks across {doc_info['total_documents']} uploaded documents."
+            formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {total_chunks} total document chunks across {len(documents)} uploaded documents."
 
         print(f"Vector document search completed. Found {len(search_results)} relevant passages.")
         return formatted_results

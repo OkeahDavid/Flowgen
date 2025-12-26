@@ -167,23 +167,72 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
       {currentResponse ? (
         <Box>
           {/* Workflow Status Header */}
-          <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Paper 
+            sx={{ 
+              p: 3, 
+              mb: 3, 
+              borderRadius: 3,
+              background: currentResponse.status === 'completed' 
+                ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
+                : currentResponse.status === 'error'
+                ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
+                : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+              border: '1px solid',
+              borderColor: currentResponse.status === 'completed' 
+                ? 'success.light'
+                : currentResponse.status === 'error'
+                ? 'error.light'
+                : 'info.light',
+              boxShadow: 2
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                bgcolor: currentResponse.status === 'completed' 
+                  ? 'success.main'
+                  : currentResponse.status === 'error'
+                  ? 'error.main'
+                  : 'info.main',
+                color: 'white'
+              }}>
                 {getStatusIcon(currentResponse.status)}
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                   {currentResponse.status.charAt(0).toUpperCase() + currentResponse.status.slice(1)}
                 </Typography>
+                <Chip
+                  label={currentResponse.status.toUpperCase()}
+                  color={getStatusColor(currentResponse.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+                  size="small"
+                  sx={{ fontWeight: 600, fontSize: '0.7rem' }}
+                />
               </Box>
-              <Chip
-                label={currentResponse.status.toUpperCase()}
-                color={getStatusColor(currentResponse.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
-                variant="outlined"
-                size="small"
-              />
             </Box>
             
-            <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', mb: 1 }}>
+            <Typography 
+              variant="caption" 
+              color="text.secondary" 
+              sx={{ 
+                fontFamily: 'monospace',
+                display: 'block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                bgcolor: 'white',
+                p: 1,
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'divider'
+              }}
+              title={currentResponse.workflow_id}
+            >
               ID: {currentResponse.workflow_id}
             </Typography>
             
@@ -191,16 +240,16 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <CircularProgress size={16} />
-                  <Typography variant="body2" color="info.main">
+                  <Typography variant="body2" color="info.main" sx={{ fontWeight: 500 }}>
                     Auto-refreshing every 3 seconds
                   </Typography>
                 </Box>
-                <LinearProgress variant="indeterminate" sx={{ borderRadius: 1 }} />
+                <LinearProgress variant="indeterminate" sx={{ borderRadius: 1, height: 6 }} />
               </Box>
             )}
 
             {lastPollTime && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, fontStyle: 'italic' }}>
                 Last updated: {lastPollTime.toLocaleTimeString()}
               </Typography>
             )}
@@ -212,7 +261,7 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 Workflow Error
               </Typography>
-              <Typography variant="body2">
+              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                 {currentResponse.error}
               </Typography>
             </Alert>
@@ -220,29 +269,41 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
 
           {/* Progress Information */}
           {currentResponse.result && (
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
+            <Paper 
+              sx={{ 
+                p: 3, 
+                mb: 3, 
+                borderRadius: 3,
+                border: '1px solid',
+                borderColor: 'divider',
+                boxShadow: 1
+              }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'text.primary' }}>
                 Progress Overview
               </Typography>
-              <Stack direction="row" spacing={2} flexWrap="wrap">
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1 }}>
                 <Chip 
                   icon={<ViewIcon />} 
                   label={`${currentResponse.result.messages?.length || 0} Messages`} 
-                  variant="outlined" 
+                  variant="filled" 
                   color="primary"
+                  sx={{ fontWeight: 600 }}
                 />
                 {currentResponse.result.total_events && (
                   <Chip 
                     label={`${currentResponse.result.total_events} Events`} 
-                    variant="outlined" 
+                    variant="filled" 
                     color="secondary"
+                    sx={{ fontWeight: 600 }}
                   />
                 )}
                 {currentResponse.result.stop_reason && currentResponse.status === 'completed' && (
                   <Chip 
                     label={currentResponse.result.stop_reason} 
-                    variant="outlined" 
+                    variant="filled" 
                     color="success"
+                    sx={{ fontWeight: 600 }}
                   />
                 )}
               </Stack>
@@ -264,55 +325,109 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
                   }
 
                   return (
-                    <Accordion key={index} sx={{ borderRadius: 2, '&:before': { display: 'none' } }}>
+                    <Accordion 
+                      key={index} 
+                      sx={{ 
+                        borderRadius: 2, 
+                        '&:before': { display: 'none' },
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: 1
+                        }
+                      }}
+                    >
                       <AccordionSummary 
                         expandIcon={<ExpandMoreIcon />}
                         sx={{ 
                           borderRadius: 2,
-                          '& .MuiAccordionSummary-content': { alignItems: 'center' }
+                          '& .MuiAccordionSummary-content': { 
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            my: 1.5
+                          }
                         }}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', mb: 1 }}>
                           {getMessageIcon(message.source)}
-                          <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontWeight: 600,
+                              wordBreak: 'break-word',
+                              color: message.source === 'user' ? 'primary.main' : 'text.primary'
+                            }}
+                            title={message.source === 'user' ? 'User Input' : 
+                                   message.source === 'DiGraphStopAgent' ? 'System' :
+                                   `Agent: ${message.source}`}
+                          >
                             {message.source === 'user' ? 'User Input' : 
                              message.source === 'DiGraphStopAgent' ? 'System' :
-                             `Agent: ${message.source}`}
+                             message.source.length > 30 ? `Agent: ${message.source.substring(0, 30)}...` : `Agent: ${message.source}`}
                           </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%', gap: 0.5 }}>
                           <Chip
                             label={message.type || 'TextMessage'}
                             size="small"
-                            variant="outlined"
+                            variant="filled"
                             color="primary"
+                            sx={{ 
+                              fontWeight: 500,
+                              fontSize: '0.7rem',
+                              height: 24
+                            }}
                           />
                           {message.models_usage && (
                             <Chip
-                              label={`${message.models_usage.prompt_tokens || 0}→${message.models_usage.completion_tokens || 0} tokens`}
+                              label={`${message.models_usage.prompt_tokens || 0}→${message.models_usage.completion_tokens || 0}`}
                               size="small"
                               variant="outlined"
                               color="secondary"
+                              sx={{ 
+                                fontWeight: 500,
+                                fontSize: '0.7rem',
+                                height: 24
+                              }}
                             />
                           )}
-                        </Box>
+                        </Stack>
                       </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 0 }}>
+                      <AccordionDetails sx={{ pt: 2, pb: 2 }}>
                         <Divider sx={{ mb: 2 }} />
-                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                          {typeof message.content === 'string' 
-                            ? message.content 
-                            : JSON.stringify(message.content, null, 2)
-                          }
-                        </Typography>
+                        <Box 
+                          sx={{ 
+                            p: 2, 
+                            bgcolor: 'grey.50', 
+                            borderRadius: 1,
+                            border: '1px solid',
+                            borderColor: 'grey.200'
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word', fontFamily: 'system-ui' }}>
+                            {typeof message.content === 'string' 
+                              ? message.content 
+                              : JSON.stringify(message.content, null, 2)
+                            }
+                          </Typography>
+                        </Box>
                         {message.models_usage && (
-                          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                              Token Usage:
+                          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                              💡 Token Usage
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              Prompt: {message.models_usage.prompt_tokens || 0} • 
-                              Completion: {message.models_usage.completion_tokens || 0} • 
-                              Total: {(message.models_usage.prompt_tokens || 0) + (message.models_usage.completion_tokens || 0)}
-                            </Typography>
+                            <Stack direction="row" spacing={2} flexWrap="wrap">
+                              <Typography variant="caption" color="text.secondary">
+                                <strong>Prompt:</strong> {message.models_usage.prompt_tokens || 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                <strong>Completion:</strong> {message.models_usage.completion_tokens || 0}
+                              </Typography>
+                              <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+                                <strong>Total:</strong> {(message.models_usage.prompt_tokens || 0) + (message.models_usage.completion_tokens || 0)}
+                              </Typography>
+                            </Stack>
                           </Box>
                         )}
                       </AccordionDetails>

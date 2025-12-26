@@ -27,7 +27,6 @@ import WorkflowResults from './WorkflowResultsTemp';
 import WorkflowManagement from './WorkflowManagementTemp';
 import type { AgentConfig, Connection, WorkflowResponse, WorkflowRequest } from '../typesTemp';
 import { createWorkflow, getWorkflowStatus } from '../services/apiTemp';
-import { workflowStorage } from '../services/localStorageTemp';
 
 interface WorkflowBuilderProps {
   initialTab?: number;
@@ -112,13 +111,7 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
         if (response.status === 'completed' || response.status === 'failed') {
           setWorkflowStatus(response.status);
           
-          // Update local storage with final status and results
-          workflowStorage.updateWorkflowStatus(
-            workflowId, 
-            response.status, 
-            response.result, 
-            response.error
-          );
+          // Workflow status stored in database only
           
           return;
         }
@@ -174,16 +167,6 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
 
       const response = await createWorkflow(request);
       setWorkflowResponse(response);
-
-      // Save workflow to local storage
-      workflowStorage.saveWorkflow({
-        id: response.workflow_id,
-        task: task.trim(),
-        status: response.status,
-        created_at: new Date().toISOString(),
-        agents,
-        connections
-      });
 
       // Poll for results if the workflow is running
       if (response.status === 'running') {
