@@ -14,9 +14,10 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 # Local imports
 from agents import AGENT_CONFIGS, AgentConfig, Connection, build_workflow_team
-from document_processor import get_document_processor
+from document_service import get_document_processor
 from database import get_db, init_db, SessionLocal
 from api_routes import router as api_router
+from document_routes import router as doc_router
 from db_service import WorkflowService
 
 # Load environment variables
@@ -73,6 +74,67 @@ app.add_middleware(
 
 # Include database API routes
 app.include_router(api_router)
+app.include_router(doc_router)
+
+# Keep old endpoints for compatibility
+@app.post("/upload-documents")
+async def upload_documents_compat(files: List[UploadFile] = File(...)):
+    """Legacy endpoint - redirects to new service."""
+    from document_service import get_document_processor
+    
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    doc_processor = get_document_processor(api_key)
+    results = []
+    
+    for file in files:
+        if not file.filename:
+            continue
+        
+        try:
+            content = await file.read()
+            result = doc_processor.upload_document(file.filename, content)
+            results.append({
+                "filename": file.filename,
+                "success": result["success"],
+                "message": result["message"],
+                "chunks_added": result.get("chunks_added", 0)
+            })
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "success": False,
+                "message": str(e),
+                "chunks_added": 0
+            })
+    
+    successful = sum(1 for r in results if r["success"])
+    total_chunks = sum(r["chunks_added"] for r in results)
+    
+    return {
+        "message": f"Uploaded {successful} of {len(results)} documents",
+        "results": results,
+        "total_chunks": total_chunks
+    }
+
+@app.get("/documents/info")
+async def get_documents_info_compat():
+    """Legacy endpoint - redirects to new service."""
+    from document_service import get_document_processor
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+    
+    doc_processor = get_document_processor(api_key)
+    documents = doc_processor.list_documents()
+    
+    return {"documents": documents}
 
 @app.on_event("startup")
 async def startup_event():
@@ -122,7 +184,8 @@ async def create_workflow(request: WorkflowRequest):
             name=f"Workflow {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             description=f"Task: {request.task[:100]}...",
             workflow_data=workflow_data,
-            tags=["auto-generated"]
+            tags=["auto-generated"],
+            status="running"
         )
         
         workflow_id = str(db_workflow.id)
@@ -243,6 +306,13 @@ async def execute_workflow(workflow_id: str, team, task: str):
             execution_log=safe_execution_log
         )
         
+        # Update workflow status to completed
+        WorkflowService.update_workflow(
+            db=db,
+            workflow_id=UUID(workflow_id),
+            status="completed"
+        )
+        
     except Exception as e:
         print(f"Error in workflow {workflow_id}: {str(e)}")
         import traceback
@@ -264,6 +334,13 @@ async def execute_workflow(workflow_id: str, team, task: str):
                 completed_at=datetime.now(),
                 input_data={"task": task},
                 error_message=str(e)
+            )
+            
+            # Update workflow status to failed
+            WorkflowService.update_workflow(
+                db=db,
+                workflow_id=UUID(workflow_id),
+                status="failed"
             )
         except Exception as db_error:
             print(f"Failed to save error to database: {db_error}")

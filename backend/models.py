@@ -1,8 +1,9 @@
 """Database models for document storage and workflow management."""
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 import uuid
 
@@ -29,7 +30,7 @@ class Document(Base):
     # Chunking information (for large documents)
     chunk_index = Column(Integer, default=0)  # Which chunk this is (0 for non-chunked)
     total_chunks = Column(Integer, default=1)  # Total chunks for this document
-    parent_doc_id = Column(UUID(as_uuid=True), nullable=True)  # Reference to parent if chunked
+    parent_doc_id = Column(UUID(as_uuid=True), ForeignKey('documents.id', ondelete='CASCADE'), nullable=True)  # Reference to parent if chunked
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -71,6 +72,9 @@ class Workflow(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
+    # Relationships - cascade delete executions when workflow is deleted
+    executions = relationship("WorkflowExecution", back_populates="workflow", cascade="all, delete-orphan")
+    
     def __repr__(self):
         return f"<Workflow(id={self.id}, name='{self.name}', status='{self.status}')>"
 
@@ -81,7 +85,7 @@ class WorkflowExecution(Base):
     __tablename__ = "workflow_executions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    workflow_id = Column(UUID(as_uuid=True), nullable=False)
+    workflow_id = Column(UUID(as_uuid=True), ForeignKey('workflows.id', ondelete='CASCADE'), nullable=False)
     
     # Execution details
     status = Column(String(50), nullable=False)  # running, completed, failed
@@ -96,6 +100,9 @@ class WorkflowExecution(Base):
     
     # Execution logs/trace
     execution_log = Column(JSON, nullable=True)  # Array of log entries
+    
+    # Relationships
+    workflow = relationship("Workflow", back_populates="executions")
     
     def __repr__(self):
         return f"<WorkflowExecution(id={self.id}, workflow_id={self.workflow_id}, status='{self.status}')>"

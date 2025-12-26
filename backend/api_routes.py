@@ -10,7 +10,7 @@ from database import get_db
 from db_service import DocumentService, WorkflowService
 
 # Create router
-router = APIRouter(prefix="/api/v1", tags=["database"])
+router = APIRouter(prefix="/api", tags=["database"])
 
 
 # Pydantic models for API requests/responses
@@ -98,13 +98,28 @@ async def get_document(
     return document
 
 
-@router.delete("/documents/{doc_id}")
+@router.delete("/documents/{doc_identifier}")
 async def delete_document(
-    doc_id: UUID,
+    doc_identifier: str,
     db: Session = Depends(get_db)
 ):
-    """Delete a document."""
-    success = DocumentService.delete_document(db=db, doc_id=doc_id)
+    """Delete a document by ID or filename (including all chunks)."""
+    # Try to parse as UUID first
+    try:
+        doc_id = UUID(doc_identifier)
+        # Get the document to find its filename
+        from models import Document
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        if doc:
+            filename = doc.filename
+            # Delete all chunks with this filename
+            success = DocumentService.delete_document_by_filename(db=db, filename=filename)
+        else:
+            success = False
+    except ValueError:
+        # If not a UUID, treat as filename
+        success = DocumentService.delete_document_by_filename(db=db, filename=doc_identifier)
+    
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document deleted successfully"}

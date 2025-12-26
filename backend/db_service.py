@@ -106,6 +106,34 @@ class DocumentService:
             db.commit()
             return True
         return False
+    
+    @staticmethod
+    def delete_document_by_filename(db: Session, filename: str) -> bool:
+        """Delete all documents (including chunks) with the given filename."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Attempting to delete documents with filename: '{filename}'")
+        
+        # Find documents with exact filename match or chunk pattern (filename_chunk_N)
+        docs = db.query(Document).filter(
+            (Document.filename == filename) | 
+            (Document.filename.like(f"{filename}_chunk_%"))
+        ).all()
+        
+        logger.info(f"Found {len(docs)} documents to delete")
+        
+        if docs:
+            for doc in docs:
+                logger.info(f"Deleting document: {doc.filename} (ID: {doc.id})")
+                db.delete(doc)
+            db.commit()
+            return True
+        
+        # Debug: list all filenames in database
+        all_filenames = db.query(Document.filename).distinct().all()
+        logger.info(f"Available filenames in database: {[f[0] for f in all_filenames]}")
+        
+        return False
 
 
 class WorkflowService:
@@ -119,6 +147,7 @@ class WorkflowService:
         description: Optional[str] = None,
         owner_id: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        status: Optional[str] = None,
     ) -> Workflow:
         """Create a new workflow."""
         workflow = Workflow(
@@ -127,6 +156,7 @@ class WorkflowService:
             workflow_data=workflow_data,
             owner_id=owner_id,
             tags=tags,
+            status=status or "draft",
         )
         db.add(workflow)
         db.commit()

@@ -150,7 +150,7 @@ class DocumentProcessor:
             logger.error(f"Error extracting DOCX: {str(e)}")
             raise
     
-    def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+    def chunk_text(self, text: str, chunk_size: int = 1500, overlap: int = 200) -> List[str]:
         """Split text into overlapping chunks for better search results."""
         if not text.strip():
             return []
@@ -503,23 +503,26 @@ class DocumentProcessor:
         db = SessionLocal()
         try:
             from models import Document as DocModel
-            from sqlalchemy import func
+            from sqlalchemy import func, cast, String
             
             # Get total chunks
             total_chunks = db.query(DocModel).count()
             
-            # Get unique documents with their chunk counts
+            # Get unique documents with their chunk counts and IDs
+            # Cast UUID to string for MIN function
             results = db.query(
                 DocModel.filename,
-                func.count(DocModel.id).label('chunk_count')
+                func.count(DocModel.id).label('chunk_count'),
+                func.min(cast(DocModel.id, String)).label('doc_id')
             ).group_by(DocModel.filename).all()
             
             documents = [
                 {
+                    "id": doc_id,
                     "filename": filename,
                     "chunk_count": chunk_count
                 }
-                for filename, chunk_count in results
+                for filename, chunk_count, doc_id in results
             ]
             
             return {
