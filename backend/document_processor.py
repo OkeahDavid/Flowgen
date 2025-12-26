@@ -1,5 +1,6 @@
 """
 Document processing and vector search functionality using OpenAI embeddings.
+Now integrated with PostgreSQL database for persistent storage.
 """
 
 import os
@@ -16,6 +17,10 @@ from openai import OpenAI
 from PyPDF2 import PdfReader
 from docx import Document
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+
+from database import SessionLocal
+from db_service import DocumentService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,9 +29,12 @@ logger = logging.getLogger(__name__)
 class DocumentProcessor:
     """Handles document processing and vector search operations using OpenAI embeddings."""
     
-    def __init__(self, storage_path: str = "./storage/documents"):
+    def __init__(self, storage_path: str = "./storage/documents", use_database: bool = True):
         """Initialize the document processor with OpenAI embeddings."""
         self.storage_path = storage_path
+        self.use_database = use_database
+        
+        # Legacy file paths (kept for backward compatibility)
         self.documents_file = os.path.join(storage_path, "documents.json")
         self.embeddings_file = os.path.join(storage_path, "embeddings.npy")
         
@@ -40,11 +48,14 @@ class DocumentProcessor:
         
         self.openai_client = OpenAI(api_key=api_key)
         
-        # Load existing documents and embeddings
-        self.documents = self._load_documents()
-        self.embeddings = self._load_embeddings()
-        
-        logger.info(f"Initialized document processor with {len(self.documents)} existing documents")
+        if use_database:
+            logger.info("Using PostgreSQL database for document storage")
+        else:
+            # Load existing documents and embeddings from files (legacy)
+            self.documents = self._load_documents()
+            self.embeddings = self._load_embeddings()
+            logger.info(f"Initialized document processor with {len(self.documents)} existing documents from JSON")
+
     
     def _load_documents(self) -> List[Dict[str, Any]]:
         """Load documents from JSON file."""
@@ -167,9 +178,34 @@ class DocumentProcessor:
             # Generate unique file ID
             file_id = self.generate_file_id(filename, file_content)
             
-            # Check if document already exists
-            existing_doc = next((doc for doc in self.documents if doc["file_id"] == file_id), None)
-            if existing_doc:
+            # Use database storage
+            if self.use_database:
+                return self._upload_document_to_db(filename, file_content, file_id)
+            else:
+                # Legacy JSON file storage
+                return self._upload_document_to_file(filename, file_content, file_id)
+            
+        except Exception as e:
+            logger.error(f"Error processing document {filename}: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Error processing {filename}: {str(e)}",
+                "file_id": file_id if 'file_id' in locals() else None
+            }
+    
+    def _upload_document_to_db(self, filename: str, file_content: bytes, file_id: str) -> Dict[str, Any]:
+        """Upload document to PostgreSQL database with vector embeddings."""
+        db = SessionLocal()
+        try:
+            # Check if document already exists using simple query
+            from models import Document as DocModel
+            
+            # Check by filename (simple check for now)
+            existing_docs = db.query(DocModel).filter(
+                DocModel.filename == filename
+            ).limit(1).all()
+            
+            if existing_docs:
                 logger.info(f"Document {filename} already exists in database")
                 return {
                     "success": True,
@@ -202,65 +238,188 @@ class DocumentProcessor:
             
             # Generate embeddings for chunks using OpenAI
             logger.info(f"Generating OpenAI embeddings for {len(chunks)} chunks")
-            chunk_embeddings = []
+            stored_chunks = 0
+            
             for i, chunk in enumerate(chunks):
                 try:
+                    # Generate embedding
                     embedding = self._get_openai_embedding(chunk)
-                    chunk_embeddings.append(embedding)
-                    if (i + 1) % 10 == 0:  # Progress logging
-                        logger.info(f"Generated embeddings for {i + 1}/{len(chunks)} chunks")
+                    
+                    # Store in database
+                    DocumentService.create_document(
+                        db=db,
+                        filename=filename,
+                        content=chunk,
+                        content_type=Path(filename).suffix.lower().replace('.', ''),
+                        embedding=embedding,
+                        file_size=len(file_content) if i == 0 else None,
+                        doc_metadata={
+                            "file_id": file_id,
+                            "text_length": len(chunk)
+                        },
+                        chunk_index=i,
+                        total_chunks=len(chunks),
+                        parent_doc_id=None
+                    )
+                    stored_chunks += 1
+                    
+                    if (i + 1) % 10 == 0:
+                        logger.info(f"Stored {i + 1}/{len(chunks)} chunks in database")
+                        
                 except Exception as e:
-                    logger.error(f"Error generating embedding for chunk {i}: {e}")
-                    return {
-                        "success": False,
-                        "message": f"Error generating embeddings: {str(e)}",
-                        "file_id": file_id
-                    }
+                    logger.error(f"Error processing chunk {i}: {e}")
+                    # Continue with next chunk rather than failing entirely
+                    continue
             
-            # Add document chunks to storage
-            start_index = len(self.documents)
-            for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
-                doc_entry = {
-                    "id": f"{file_id}_{i}",
-                    "filename": filename,
-                    "file_id": file_id,
-                    "chunk_index": i,
-                    "total_chunks": len(chunks),
-                    "content": chunk,
-                    "text_length": len(chunk)
-                }
-                self.documents.append(doc_entry)
-            
-            # Update embeddings array
-            if self.embeddings is None:
-                self.embeddings = np.array(chunk_embeddings)
-            else:
-                self.embeddings = np.vstack([self.embeddings, chunk_embeddings])
-            
-            # Save to disk
-            self._save_documents()
-            self._save_embeddings()
-            
-            logger.info(f"Successfully stored {len(chunks)} chunks from {filename}")
+            logger.info(f"Successfully stored {stored_chunks} chunks from {filename} in database")
             
             return {
                 "success": True,
                 "message": f"Successfully processed and stored {filename}",
                 "file_id": file_id,
-                "chunks_added": len(chunks),
+                "chunks_added": stored_chunks,
                 "text_length": len(text_content)
             }
             
-        except Exception as e:
-            logger.error(f"Error processing document {filename}: {str(e)}")
+        finally:
+            db.close()
+    
+    def _upload_document_to_file(self, filename: str, file_content: bytes, file_id: str) -> Dict[str, Any]:
+        """Legacy method: Upload document to JSON file storage."""
+        # Check if document already exists
+        existing_doc = next((doc for doc in self.documents if doc["file_id"] == file_id), None)
+        if existing_doc:
+            logger.info(f"Document {filename} already exists in database")
+            return {
+                "success": True,
+                "message": f"Document {filename} already exists in database",
+                "file_id": file_id,
+                "chunks_added": 0
+            }
+        
+        # Extract text from file
+        logger.info(f"Extracting text from {filename}")
+        text_content = self.extract_text_from_file(file_content, filename)
+        
+        if not text_content.strip():
             return {
                 "success": False,
-                "message": f"Error processing {filename}: {str(e)}",
-                "file_id": file_id if 'file_id' in locals() else None
+                "message": f"No text content could be extracted from {filename}",
+                "file_id": file_id
             }
+        
+        # Split text into chunks
+        chunks = self.chunk_text(text_content)
+        logger.info(f"Split {filename} into {len(chunks)} chunks")
+        
+        if not chunks:
+            return {
+                "success": False,
+                "message": f"No valid text chunks created from {filename}",
+                "file_id": file_id
+            }
+        
+        # Generate embeddings for chunks using OpenAI
+        logger.info(f"Generating OpenAI embeddings for {len(chunks)} chunks")
+        chunk_embeddings = []
+        for i, chunk in enumerate(chunks):
+            try:
+                embedding = self._get_openai_embedding(chunk)
+                chunk_embeddings.append(embedding)
+                if (i + 1) % 10 == 0:  # Progress logging
+                    logger.info(f"Generated embeddings for {i + 1}/{len(chunks)} chunks")
+            except Exception as e:
+                logger.error(f"Error generating embedding for chunk {i}: {e}")
+                return {
+                    "success": False,
+                    "message": f"Error generating embeddings: {str(e)}",
+                    "file_id": file_id
+                }
+        
+        # Add document chunks to storage
+        start_index = len(self.documents)
+        for i, (chunk, embedding) in enumerate(zip(chunks, chunk_embeddings)):
+            doc_entry = {
+                "id": f"{file_id}_{i}",
+                "filename": filename,
+                "file_id": file_id,
+                "chunk_index": i,
+                "total_chunks": len(chunks),
+                "content": chunk,
+                "text_length": len(chunk)
+            }
+            self.documents.append(doc_entry)
+        
+        # Update embeddings array
+        if self.embeddings is None:
+            self.embeddings = np.array(chunk_embeddings)
+        else:
+            self.embeddings = np.vstack([self.embeddings, chunk_embeddings])
+        
+        # Save to disk
+        self._save_documents()
+        self._save_embeddings()
+        
+        logger.info(f"Successfully stored {len(chunks)} chunks from {filename}")
+        
+        return {
+            "success": True,
+            "message": f"Successfully processed and stored {filename}",
+            "file_id": file_id,
+            "chunks_added": len(chunks),
+            "text_length": len(text_content)
+        }
     
     def search_documents(self, query: str, max_results: int = 5, filter_filenames: List[str] = None) -> List[Dict[str, Any]]:
-        """Search for relevant document chunks using OpenAI embeddings and cosine similarity."""
+        """Search for relevant document chunks using vector similarity."""
+        if self.use_database:
+            return self._search_documents_in_db(query, max_results, filter_filenames)
+        else:
+            return self._search_documents_in_file(query, max_results, filter_filenames)
+    
+    def _search_documents_in_db(self, query: str, max_results: int = 5, filter_filenames: List[str] = None) -> List[Dict[str, Any]]:
+        """Search documents in PostgreSQL database using vector similarity."""
+        db = SessionLocal()
+        try:
+            logger.info(f"Searching database for query: {query}")
+            
+            # Generate embedding for query
+            query_embedding = self._get_openai_embedding(query)
+            
+            # Search using database service
+            results = DocumentService.search_documents_by_similarity(
+                db=db,
+                query_embedding=query_embedding,
+                limit=max_results,
+                threshold=0.5  # Minimum similarity threshold
+            )
+            
+            # Format results
+            formatted_results = []
+            for doc, similarity in results:
+                # Apply filename filter if specified
+                if filter_filenames and doc.filename not in filter_filenames:
+                    continue
+                
+                formatted_results.append({
+                    "id": str(doc.id),
+                    "filename": doc.filename,
+                    "content": doc.content,
+                    "chunk_index": doc.chunk_index,
+                    "total_chunks": doc.total_chunks,
+                    "similarity": float(similarity),
+                    "relevance_score": float(similarity),  # Add for compatibility
+                    "text_length": len(doc.content)
+                })
+            
+            logger.info(f"Found {len(formatted_results)} relevant chunks")
+            return formatted_results[:max_results]
+            
+        finally:
+            db.close()
+    
+    def _search_documents_in_file(self, query: str, max_results: int = 5, filter_filenames: List[str] = None) -> List[Dict[str, Any]]:
+        """Legacy method: Search documents in JSON file storage."""
         try:
             # Check if we have any documents
             if len(self.documents) == 0 or self.embeddings is None:
@@ -326,35 +485,10 @@ class DocumentProcessor:
     def get_document_info(self) -> Dict[str, Any]:
         """Get information about stored documents."""
         try:
-            if len(self.documents) == 0:
-                return {
-                    "total_chunks": 0,
-                    "total_documents": 0,
-                    "documents": []
-                }
-            
-            # Count unique files
-            unique_files = set()
-            document_info = {}
-            
-            for doc in self.documents:
-                filename = doc['filename']
-                file_id = doc['file_id']
-                unique_files.add(file_id)
-                
-                if file_id not in document_info:
-                    document_info[file_id] = {
-                        "filename": filename,
-                        "chunk_count": 0
-                    }
-                document_info[file_id]["chunk_count"] += 1
-            
-            return {
-                "total_chunks": len(self.documents),
-                "total_documents": len(unique_files),
-                "documents": list(document_info.values())
-            }
-            
+            if self.use_database:
+                return self._get_document_info_from_db()
+            else:
+                return self._get_document_info_from_file()
         except Exception as e:
             logger.error(f"Error getting document info: {str(e)}")
             return {
@@ -363,6 +497,93 @@ class DocumentProcessor:
                 "documents": [],
                 "error": str(e)
             }
+    
+    def _get_document_info_from_db(self) -> Dict[str, Any]:
+        """Get document info from database."""
+        db = SessionLocal()
+        try:
+            from models import Document as DocModel
+            from sqlalchemy import func
+            
+            # Get total chunks
+            total_chunks = db.query(DocModel).count()
+            
+            # Get unique documents with their chunk counts
+            results = db.query(
+                DocModel.filename,
+                func.count(DocModel.id).label('chunk_count')
+            ).group_by(DocModel.filename).all()
+            
+            documents = [
+                {
+                    "filename": filename,
+                    "chunk_count": chunk_count
+                }
+                for filename, chunk_count in results
+            ]
+            
+            return {
+                "total_chunks": total_chunks,
+                "total_documents": len(documents),
+                "documents": documents
+            }
+        finally:
+            db.close()
+    
+    def _get_document_info_from_file(self) -> Dict[str, Any]:
+        """Get document info from JSON files."""
+        if len(self.documents) == 0:
+            return {
+                "total_chunks": 0,
+                "total_documents": 0,
+                "documents": []
+            }
+        
+        # Count unique files
+        unique_files = set()
+        document_info = {}
+        
+        for doc in self.documents:
+            filename = doc['filename']
+            file_id = doc['file_id']
+            unique_files.add(file_id)
+            
+            if file_id not in document_info:
+                document_info[file_id] = {
+                    "filename": filename,
+                    "chunk_count": 0
+                }
+            document_info[file_id]["chunk_count"] += 1
+        
+        return {
+            "total_chunks": len(self.documents),
+            "total_documents": len(unique_files),
+            "documents": list(document_info.values())
+        }
+    
+    def get_available_documents(self) -> List[str]:
+        """Get list of available document filenames."""
+        if self.use_database:
+            return self._get_available_documents_from_db()
+        else:
+            return self._get_available_documents_from_file()
+    
+    def _get_available_documents_from_db(self) -> List[str]:
+        """Get available documents from database."""
+        db = SessionLocal()
+        try:
+            from models import Document as DocModel
+            results = db.query(DocModel.filename).distinct().all()
+            return [filename for (filename,) in results]
+        finally:
+            db.close()
+    
+    def _get_available_documents_from_file(self) -> List[str]:
+        """Get available documents from JSON files."""
+        unique_filenames = set()
+        for doc in self.documents:
+            unique_filenames.add(doc['filename'])
+        return list(unique_filenames)
     
     def clear_all_documents(self) -> bool:
         """Clear all documents from storage."""
