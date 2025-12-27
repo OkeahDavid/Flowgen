@@ -85,8 +85,7 @@ const WorkflowBuilder: React.FC = () => {
         message: `Added ${newAgent.name} with default configuration`,
         severity: 'success'
       });
-    } catch (error) {
-      console.error('Error adding agent:', error);
+    } catch {
       setSnackbar({
         open: true,
         message: 'Failed to add agent. Using fallback configuration.',
@@ -225,8 +224,8 @@ const WorkflowBuilder: React.FC = () => {
         if (attempts < maxAttempts) {
           setTimeout(poll, 10000); // Poll every 10 seconds
         }
-      } catch (error) {
-        console.error('Error polling workflow status:', error);
+      } catch {
+        // Polling error - will retry
       }
     };
 

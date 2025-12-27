@@ -314,7 +314,7 @@ const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
             color="text.secondary"
             sx={{ mt: 2, fontStyle: 'italic' }}
           >
-            💡 Tip: Use the floating navigation button to switch between building workflows and viewing your execution results!
+            Tip: Use the floating navigation button to switch between building workflows and viewing your execution results!
           </Typography>
         </Paper>
       </Container>

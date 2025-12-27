@@ -8,7 +8,6 @@ from models import Document, Workflow, WorkflowExecution
 
 def test_workflow_cascade_delete():
     """Test that deleting a workflow also deletes its executions."""
-    print("\n🧪 Testing Workflow Cascade Delete...")
     
     db = SessionLocal()
     try:

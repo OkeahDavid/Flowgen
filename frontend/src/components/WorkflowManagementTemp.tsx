@@ -36,6 +36,8 @@ import {
   Download as ExportIcon
 } from '@mui/icons-material';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 interface WorkflowSummary {
   id: string;
   status: string;
@@ -79,7 +81,7 @@ const WorkflowManagement: React.FC = () => {
       setError(null);
       
       // Fetch workflows from database API
-      const response = await fetch('http://localhost:8000/api/workflows');
+      const response = await fetch(`${API_BASE_URL}/api/workflows`);
       if (!response.ok) {
         throw new Error(`Failed to fetch workflows: ${response.statusText}`);
       }
@@ -87,7 +89,7 @@ const WorkflowManagement: React.FC = () => {
       const dbWorkflows = await response.json();
       
       // Convert database workflows to WorkflowSummary format
-      const workflowList = dbWorkflows.map((wf: any) => ({
+      const workflowList = dbWorkflows.map((wf: { id: string; status?: string; description?: string; name?: string; created_at: string; updated_at?: string; workflow_data?: { agents?: unknown[] } }) => ({
         id: wf.id,
         status: wf.status || 'unknown',
         task: wf.description || wf.name || 'No description',
@@ -99,7 +101,6 @@ const WorkflowManagement: React.FC = () => {
       setWorkflows(workflowList);
     } catch (err) {
       setError('Failed to load workflows: ' + String(err));
-      console.error('Error loading workflows:', err);
     } finally {
       setLoading(false);
     }
@@ -112,7 +113,7 @@ const WorkflowManagement: React.FC = () => {
   const handleViewWorkflow = async (workflowId: string) => {
     try {
       // Fetch workflow details from API
-      const response = await fetch(`http://localhost:8000/workflow/${workflowId}`);
+      const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch workflow: ${response.statusText}`);
       }
@@ -122,14 +123,13 @@ const WorkflowManagement: React.FC = () => {
       setViewDialog(true);
     } catch (err) {
       setError('Failed to load workflow details: ' + String(err));
-      console.error('Error loading workflow:', err);
     }
   };
 
   const handleDeleteWorkflow = async (workflowId: string) => {
     try {
       // Delete workflow from database
-      const response = await fetch(`http://localhost:8000/api/workflows/${workflowId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/workflows/${workflowId}`, {
         method: 'DELETE'
       });
       
@@ -142,14 +142,13 @@ const WorkflowManagement: React.FC = () => {
       setWorkflowToDelete(null);
     } catch (err) {
       setError('Failed to delete workflow: ' + String(err));
-      console.error('Error deleting workflow:', err);
     }
   };
 
   const handleExportWorkflow = async (workflowId: string) => {
     try {
       // Fetch workflow from API
-      const response = await fetch(`http://localhost:8000/workflow/${workflowId}`);
+      const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch workflow: ${response.statusText}`);
       }
@@ -178,7 +177,6 @@ const WorkflowManagement: React.FC = () => {
       
     } catch (err) {
       setError('Failed to export workflow: ' + String(err));
-      console.error('Error exporting workflow:', err);
     }
   };
 

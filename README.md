@@ -8,7 +8,8 @@ A drag-and-drop interface for building and executing AI agent workflows using Au
 - **Three Agent Types**: Web Search, Document Search, and Summarizer agents
 - **Visual Workflow Design**: Connect agents with visual connections
 - **Real-time Execution**: Execute workflows and see results in real-time
-- AutoGen Integration**: Powered by Microsoft's AutoGen framework with [GraphFlow](https://microsoft.github.io/autogen/stable//user-guide/agentchat-user-guide/graph-flow.html)
+- **AutoGen Integration**: Powered by Microsoft's AutoGen framework with [GraphFlow](https://microsoft.github.io/autogen/stable//user-guide/agentchat-user-guide/graph-flow.html)
+- **PostgreSQL Database**: Persistent storage for workflows, executions, and documents
 - **Material UI Design**: Clean, modern interface built with React and Material UI
 <img width="1914" height="900" alt="image" src="https://github.com/user-attachments/assets/78e0ee4f-af54-413f-b3ee-d9dec6a6bef6" />
 
@@ -32,6 +33,7 @@ A drag-and-drop interface for building and executing AI agent workflows using Au
 - Python 3.11+
 - Node.js 18+
 - OpenAI API key
+- PostgreSQL 14+ (with pgvector extension)
 
 ### Backend Setup
 
@@ -48,8 +50,14 @@ A drag-and-drop interface for building and executing AI agent workflows using Au
 3. Set up environment variables:
    - Copy the `.env` file in the root directory
    - Replace `your_openai_api_key_here` with your actual OpenAI API key
+   - Set `DATABASE_URL` to your PostgreSQL connection string
 
-4. Run the backend server:
+4. Initialize the database:
+   ```bash
+   uv run init_db.py
+   ```
+
+5. Run the backend server:
    ```bash
    uv run main.py
    ```

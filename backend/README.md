@@ -12,9 +12,10 @@ A FastAPI-based backend for the Flowgen workflow management system that enables 
 
 ### 📄 Document Processing
 - **File Upload**: Support for PDF, DOCX, TXT, and Markdown files
-- **Vector Search**: OpenAI embeddings-powered semantic search
+- **Vector Search**: PostgreSQL with pgvector for semantic search
 - **Document Filtering**: Search specific documents selected by users
 - **Chunk-based Storage**: Efficient text chunking for better search results
+- **Database Persistence**: PostgreSQL for workflows, executions, and documents
 
 ### 🔧 Workflow Execution
 - **Graph-based Workflows**: Define agent connections and execution flow
@@ -84,9 +85,15 @@ pip install -r requirements.txt
 3. **Set environment variables**:
 ```bash
 export OPENAI_API_KEY="your-openai-api-key"
+export DATABASE_URL="postgresql://user:password@localhost/flowgen"
 ```
 
-4. **Run the server**:
+4. **Initialize the database**:
+```bash
+uv run init_db.py
+```
+
+5. **Run the server**:
 ```bash
 uv run main.py
 # or
@@ -153,7 +160,7 @@ curl -X POST "http://localhost:8000/documents/search" \
 - **Supported formats**: PDF, DOCX, TXT, MD
 - **Chunk size**: 1000 characters with 200 character overlap
 - **Embedding model**: text-embedding-ada-002
-- **Storage**: JSON files with NumPy arrays for embeddings
+- **Storage**: PostgreSQL database with pgvector for embeddings
 
 ## Development
 
@@ -175,25 +182,16 @@ curl -X POST "http://localhost:8000/documents/search" \
 
 ## TODO & Future Improvements
 
-### 🗄️ Database Integration (High Priority)
-- **Migrate from JSON storage to database**: Replace current JSON file storage with PostgreSQL or similar
-- **Embedding storage**: Store document embeddings in vector database (e.g., pgvector, Pinecone, or Weaviate)
-- **Performance**: Improve search performance for large document collections
-- **Scalability**: Support for concurrent users and larger datasets
-- **Metadata management**: Better document metadata and version tracking
-
-### 🚀 Additional Enhancements
+### � Enhancements
 - **Authentication**: User management and secure access
 - **Document versioning**: Track document changes and updates
 - **Batch processing**: Handle multiple document uploads efficiently
 - **Caching**: Redis integration for frequently accessed data
-- **Monitoring**: Logging and metrics for production deployment
-- **Error handling**: Improved error messages and recovery
+- **Monitoring**: Enhanced logging and metrics for production deployment
 - **Testing**: Comprehensive test suite for all components
 
 ### 🔧 Performance Optimizations
 - **Async document processing**: Background task queue for uploads
-- **Connection pooling**: Database connection optimization
 - **Embedding caching**: Cache frequently used embeddings
 - **API rate limiting**: Protect against excessive API usage
 

@@ -61,7 +61,6 @@ def create_openai_client():
     if api_key.startswith("your_") or api_key == "your_openai_api_key_here":
         raise HTTPException(status_code=500, detail="Please set a valid OpenAI API key in the .env file")
     
-    print(f"Creating OpenAI client with API key: {api_key[:10]}...")
     return OpenAIChatCompletionClient(model="gpt-4o-mini", api_key=api_key)
 
 def verify_demo_token(authorization: Optional[str] = Header(None)):
@@ -183,12 +182,9 @@ async def get_documents_info_compat():
 async def startup_event():
     """Initialize database on application startup"""
     try:
-        print("Initializing database...")
         init_db()
-        print("✓ Database initialized successfully")
     except Exception as e:
-        print(f"✗ Database initialization failed: {e}")
-        print("  The API will still run, but database features may not work")
+        pass  # Database features may not work
 
 @app.get("/")
 async def root():
@@ -295,15 +291,11 @@ async def execute_workflow(workflow_id: str, team, task: str):
         return str(obj)
     
     try:
-        print(f"Starting workflow execution for {workflow_id} with task: {task}")
-        
         # Run the GraphFlow workflow using run_stream
         messages = []
         async for event in team.run_stream(task=task):
-            print(f"Workflow event: {event}")
             messages.append(event)
         
-        print(f"Workflow {workflow_id} completed successfully")
         
         # Format results with safe serialization
         safe_messages = []
@@ -364,7 +356,6 @@ async def execute_workflow(workflow_id: str, team, task: str):
         )
         
     except Exception as e:
-        print(f"Error in workflow {workflow_id}: {str(e)}")
         import traceback
         traceback.print_exc()
         
@@ -393,7 +384,6 @@ async def execute_workflow(workflow_id: str, team, task: str):
                 status="failed"
             )
         except Exception as db_error:
-            print(f"Failed to save error to database: {db_error}")
             db.rollback()
     finally:
         db.close()

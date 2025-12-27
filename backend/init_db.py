@@ -18,10 +18,7 @@ def create_pgvector_extension():
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.commit()
-            print("✓ pgvector extension created successfully")
     except Exception as e:
-        print(f"✗ Error creating pgvector extension: {e}")
-        print("  Note: You may need database superuser privileges to create extensions")
         raise
 
 
@@ -30,12 +27,7 @@ def create_tables():
     print("\nCreating database tables...")
     try:
         Base.metadata.create_all(bind=engine)
-        print("✓ All tables created successfully:")
-        print(f"  - {Document.__tablename__}")
-        print(f"  - {Workflow.__tablename__}")
-        print(f"  - {WorkflowExecution.__tablename__}")
     except Exception as e:
-        print(f"✗ Error creating tables: {e}")
         raise
 
 
@@ -51,26 +43,20 @@ def verify_tables():
                 ORDER BY table_name
             """))
             tables = [row[0] for row in result]
-            print(f"✓ Found {len(tables)} tables in database:")
-            for table in tables:
-                print(f"  - {table}")
     except Exception as e:
-        print(f"✗ Error verifying tables: {e}")
+        pass
 
 
 def reset_database():
     """Drop all tables and recreate them (USE WITH CAUTION)."""
-    print("\n⚠️  WARNING: This will delete all data!")
+    print("\nWARNING: This will delete all data!")
     response = input("Are you sure you want to reset the database? (yes/no): ")
     
     if response.lower() == "yes":
-        print("\nDropping all tables...")
         try:
             Base.metadata.drop_all(bind=engine)
-            print("✓ All tables dropped")
             create_tables()
         except Exception as e:
-            print(f"✗ Error resetting database: {e}")
             raise
     else:
         print("Database reset cancelled")

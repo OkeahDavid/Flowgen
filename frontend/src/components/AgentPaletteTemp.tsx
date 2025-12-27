@@ -23,8 +23,8 @@ const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAge
   const handleClick = async () => {
     try {
       await onAddAgent(agent.id);
-    } catch (error) {
-      console.error('Error adding agent:', error);
+    } catch {
+      // Error handled by parent
     }
   };
 

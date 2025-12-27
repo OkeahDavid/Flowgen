@@ -38,6 +38,8 @@ import { DndContext, useDraggable, useSensor, useSensors, PointerSensor } from '
 import type { DragEndEvent } from '@dnd-kit/core';
 import type { AgentConfig, Connection } from '../typesTemp';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // Agent-specific configuration components
 interface AgentConfigProps {
   agent: AgentConfig;
@@ -117,15 +119,13 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
   const loadAvailableDocuments = async () => {
     setIsLoadingDocs(true);
     try {
-      const response = await fetch('http://localhost:8000/documents/info');
+      const response = await fetch(`${API_BASE_URL}/documents/info`);
       if (response.ok) {
         const data = await response.json();
         setAvailableDocuments(data.documents || []);
-      } else {
-        console.error('Failed to load available documents');
       }
-    } catch (error) {
-      console.error('Error loading documents:', error);
+    } catch {
+      // Error loading documents
     } finally {
       setIsLoadingDocs(false);
     }
@@ -144,7 +144,7 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
         formData.append('files', file);
       });
 
-      const response = await fetch('http://localhost:8000/upload-documents', {
+      const response = await fetch(`${API_BASE_URL}/upload-documents`, {
         method: 'POST',
         body: formData,
       });
@@ -184,7 +184,6 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
       }
 
     } catch (error) {
-      console.error('Upload error:', error);
       setUploadStatus(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsUploading(false);
@@ -226,7 +225,7 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/documents/${docId}`, {
+      const response = await fetch(`${API_BASE_URL}/documents/${docId}`, {
         method: 'DELETE',
       });
 
@@ -250,7 +249,6 @@ const AgentDocumentConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) =>
       setUploadStatus(`Successfully deleted "${fileName}"`);
       setTimeout(() => setUploadStatus(''), 3000);
     } catch (error) {
-      console.error('Delete error:', error);
       setUploadStatus(`Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setTimeout(() => setUploadStatus(''), 5000);
     }
@@ -581,12 +579,10 @@ const AgentNode: React.FC<AgentNodeProps> = ({
   } : undefined;
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>) => {
-    console.log('Menu button clicked for agent:', agent.id);
     setAnchorEl(event.currentTarget);
   };
 
   const handleMenuClose = () => {
-    console.log('Menu closed for agent:', agent.id);
     setAnchorEl(null);
   };
 
@@ -617,16 +613,12 @@ const AgentNode: React.FC<AgentNodeProps> = ({
         style={style}
         onDoubleClick={(e) => {
           e.stopPropagation();
-          console.log('Double-clicked agent:', agent.id, 'connectingFrom:', connectingFrom);
           // Alternative connection method - double click to start/complete connection
           if (connectingFrom && connectingFrom !== agent.id) {
-            console.log('Double-click completing connection from', connectingFrom, 'to', agent.id);
             onCompleteConnection(agent.id);
           } else if (!connectingFrom) {
-            console.log('Double-click starting connection from', agent.id);
             onStartConnection(agent.id);
           } else if (connectingFrom === agent.id) {
-            console.log('Double-click canceling connection');
             onCancelConnection();
           }
         }}
@@ -679,7 +671,6 @@ const AgentNode: React.FC<AgentNodeProps> = ({
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              console.log('Three dots clicked!', agent.id);
               handleMenuClick(e);
             }}
             sx={{ 
@@ -707,18 +698,14 @@ const AgentNode: React.FC<AgentNodeProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Right handle clicked for agent:', agent.id, 'connectingFrom:', connectingFrom);
             if (connectingFrom === agent.id) {
               // Cancel connection if clicking on the same agent
-              console.log('Canceling connection');
               onCancelConnection();
             } else if (connectingFrom) {
               // Complete connection
-              console.log('Completing connection to:', agent.id);
               onCompleteConnection(agent.id);
             } else {
               // Start connection
-              console.log('Starting connection from:', agent.id);
               onStartConnection(agent.id);
             }
           }}
@@ -764,12 +751,8 @@ const AgentNode: React.FC<AgentNodeProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Left handle clicked for agent:', agent.id, 'connectingFrom:', connectingFrom);
             if (connectingFrom && connectingFrom !== agent.id) {
-              console.log('Completing connection from', connectingFrom, 'to', agent.id);
               onCompleteConnection(agent.id);
-            } else {
-              console.log('Left handle clicked but no valid connection state');
             }
           }}
           style={{
@@ -1117,20 +1100,13 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   const handleStartConnection = (agentId: string) => {
-    console.log('Starting connection from:', agentId);
     setConnectingFrom(agentId);
   };
 
   const handleCompleteConnection = (targetId: string) => {
-    console.log('Completing connection to:', targetId, 'from:', connectingFrom);
     if (connectingFrom && connectingFrom !== targetId) {
-      console.log('Creating connection:', connectingFrom, '->', targetId);
       onAddConnection(connectingFrom, targetId);
       setConnectingFrom(null);
-      // Visual feedback
-      console.log('Connection created successfully!');
-    } else {
-      console.log('Cannot complete connection - invalid state');
     }
   };
 
@@ -1338,7 +1314,6 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  console.log('Removing connection:', connection);
                   onRemoveConnection(connection.source_id, connection.target_id);
                 }}
                 style={{
@@ -1408,7 +1383,6 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               {connectingFrom && (
                 <button 
                   onClick={() => {
-                    console.log('Cancel connection button clicked');
                     handleCancelConnection();
                   }}
                   style={{ 

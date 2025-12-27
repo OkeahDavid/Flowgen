@@ -27,8 +27,7 @@ class WorkflowLocalStorage {
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Error loading workflows from localStorage:', error);
+    } catch {
       return [];
     }
   }
@@ -45,57 +44,45 @@ class WorkflowLocalStorage {
    * Save a workflow to local storage
    */
   saveWorkflow(workflow: StoredWorkflow): void {
-    try {
-      const workflows = this.getAllWorkflows();
-      const existingIndex = workflows.findIndex(w => w.id === workflow.id);
-      
-      if (existingIndex >= 0) {
-        // Update existing workflow
-        workflows[existingIndex] = { ...workflow, modified_at: new Date().toISOString() };
-      } else {
-        // Add new workflow
-        workflows.unshift({ ...workflow, created_at: workflow.created_at || new Date().toISOString() });
-      }
-      
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
-      console.log(`Workflow ${workflow.id} saved to localStorage`);
-    } catch (error) {
-      console.error('Error saving workflow to localStorage:', error);
-      throw error;
+    const workflows = this.getAllWorkflows();
+    const existingIndex = workflows.findIndex(w => w.id === workflow.id);
+    
+    if (existingIndex >= 0) {
+      // Update existing workflow
+      workflows[existingIndex] = { ...workflow, modified_at: new Date().toISOString() };
+    } else {
+      // Add new workflow
+      workflows.unshift({ ...workflow, created_at: workflow.created_at || new Date().toISOString() });
     }
+    
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
   }
 
   /**
    * Update workflow status and results
    */
   updateWorkflowStatus(workflowId: string, status: string, result?: WorkflowResponse['result'], error?: string): void {
-    try {
-      const workflows = this.getAllWorkflows();
-      const workflowIndex = workflows.findIndex(w => w.id === workflowId);
+    const workflows = this.getAllWorkflows();
+    const workflowIndex = workflows.findIndex(w => w.id === workflowId);
+    
+    if (workflowIndex >= 0) {
+      const workflow = workflows[workflowIndex];
+      workflow.status = status;
+      workflow.modified_at = new Date().toISOString();
       
-      if (workflowIndex >= 0) {
-        const workflow = workflows[workflowIndex];
-        workflow.status = status;
-        workflow.modified_at = new Date().toISOString();
-        
-        if (status === 'completed' || status === 'failed') {
-          workflow.completed_at = new Date().toISOString();
-        }
-        
-        if (result) {
-          workflow.result = result;
-        }
-        
-        if (error) {
-          workflow.error = error;
-        }
-        
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
-        console.log(`Workflow ${workflowId} status updated to ${status}`);
+      if (status === 'completed' || status === 'failed') {
+        workflow.completed_at = new Date().toISOString();
       }
-    } catch (error) {
-      console.error('Error updating workflow status in localStorage:', error);
-      throw error;
+      
+      if (result) {
+        workflow.result = result;
+      }
+      
+      if (error) {
+        workflow.error = error;
+      }
+      
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
     }
   }
 
@@ -103,21 +90,15 @@ class WorkflowLocalStorage {
    * Delete a workflow from local storage
    */
   deleteWorkflow(workflowId: string): boolean {
-    try {
-      const workflows = this.getAllWorkflows();
-      const filteredWorkflows = workflows.filter(w => w.id !== workflowId);
-      
-      if (filteredWorkflows.length < workflows.length) {
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredWorkflows));
-        console.log(`Workflow ${workflowId} deleted from localStorage`);
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('Error deleting workflow from localStorage:', error);
-      throw error;
+    const workflows = this.getAllWorkflows();
+    const filteredWorkflows = workflows.filter(w => w.id !== workflowId);
+    
+    if (filteredWorkflows.length < workflows.length) {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filteredWorkflows));
+      return true;
     }
+    
+    return false;
   }
 
   /**
@@ -170,46 +151,34 @@ class WorkflowLocalStorage {
    * Import workflows from JSON
    */
   importWorkflows(jsonData: string): void {
-    try {
-      const importedWorkflows = JSON.parse(jsonData);
-      
-      if (!Array.isArray(importedWorkflows)) {
-        throw new Error('Invalid format: expected array of workflows');
-      }
-      
-      const existingWorkflows = this.getAllWorkflows();
-      const mergedWorkflows = [...existingWorkflows];
-      
-      importedWorkflows.forEach((importedWorkflow: StoredWorkflow) => {
-        const existingIndex = mergedWorkflows.findIndex(w => w.id === importedWorkflow.id);
-        if (existingIndex >= 0) {
-          // Update existing
-          mergedWorkflows[existingIndex] = importedWorkflow;
-        } else {
-          // Add new
-          mergedWorkflows.push(importedWorkflow);
-        }
-      });
-      
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(mergedWorkflows));
-      console.log(`Imported ${importedWorkflows.length} workflows`);
-    } catch (error) {
-      console.error('Error importing workflows:', error);
-      throw error;
+    const importedWorkflows = JSON.parse(jsonData);
+    
+    if (!Array.isArray(importedWorkflows)) {
+      throw new Error('Invalid format: expected array of workflows');
     }
+    
+    const existingWorkflows = this.getAllWorkflows();
+    const mergedWorkflows = [...existingWorkflows];
+    
+    importedWorkflows.forEach((importedWorkflow: StoredWorkflow) => {
+      const existingIndex = mergedWorkflows.findIndex(w => w.id === importedWorkflow.id);
+      if (existingIndex >= 0) {
+        // Update existing
+        mergedWorkflows[existingIndex] = importedWorkflow;
+      } else {
+        // Add new
+        mergedWorkflows.push(importedWorkflow);
+      }
+    });
+    
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(mergedWorkflows));
   }
 
   /**
    * Clear all workflows from storage
    */
   clearAllWorkflows(): void {
-    try {
-      localStorage.removeItem(this.STORAGE_KEY);
-      console.log('All workflows cleared from localStorage');
-    } catch (error) {
-      console.error('Error clearing workflows:', error);
-      throw error;
-    }
+    localStorage.removeItem(this.STORAGE_KEY);
   }
 }
 

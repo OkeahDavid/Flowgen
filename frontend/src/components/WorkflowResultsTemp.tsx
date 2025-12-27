@@ -59,8 +59,7 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
           if (updatedResponse.status !== 'running') {
             setPolling(false);
           }
-        } catch (error) {
-          console.error('Error polling workflow status:', error);
+        } catch {
           setPolling(false);
         }
       }, 3000); // Poll every 3 seconds
@@ -90,8 +89,8 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
         if (onWorkflowUpdate) {
           onWorkflowUpdate(updatedResponse);
         }
-      } catch (error) {
-        console.error('Error refreshing workflow status:', error);
+      } catch {
+        // Error refreshing status
       }
     }
   };
@@ -415,7 +414,7 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
                         {message.models_usage && (
                           <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                              💡 Token Usage
+                              Token Usage
                             </Typography>
                             <Stack direction="row" spacing={2} flexWrap="wrap">
                               <Typography variant="caption" color="text.secondary">

@@ -127,8 +127,7 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
             severity: 'warning',
           });
         }
-      } catch (error) {
-        console.error('Error polling workflow status:', error);
+      } catch {
         setWorkflowStatus('error');
         setSnackbar({
           open: true,
@@ -200,7 +199,6 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
     setAgents([]);
     setConnections([]);
     setWorkflowResponse(null);
-    console.log('Clearing workflow...');
   };
 
   return (

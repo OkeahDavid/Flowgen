@@ -3,10 +3,6 @@ import type { WorkflowRequest, AgentConfig } from '../typesTemp';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN || '';
 
-// Debug logging
-console.log('[apiTemp] API_BASE_URL:', API_BASE_URL);
-console.log('[apiTemp] DEMO_TOKEN present:', !!DEMO_TOKEN);
-
 // Agent type configuration from backend
 export interface AgentTypeConfig {
   name: string;
@@ -29,8 +25,7 @@ export const getAgentTypes = async (): Promise<AgentTypesResponse> => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return await response.json();
-  } catch (error) {
-    console.error('Error fetching agent types:', error);
+  } catch {
     // Fallback data if backend is not available
     return {
       web_search: {
@@ -51,11 +46,8 @@ export const getAgentTypes = async (): Promise<AgentTypesResponse> => {
 
 // Create a new agent with default configuration from backend
 export const createAgentFromType = async (type: string, position?: { x: number; y: number }): Promise<AgentConfig> => {
-  console.log('Creating agent of type:', type);
   const agentTypes = await getAgentTypes();
-  console.log('Fetched agent types:', agentTypes);
   const typeConfig = agentTypes[type];
-  console.log('Type config for', type, ':', typeConfig);
   
   if (!typeConfig) {
     throw new Error(`Unknown agent type: ${type}`);
@@ -70,7 +62,6 @@ export const createAgentFromType = async (type: string, position?: { x: number; 
     config: {}
   };
   
-  console.log('Created agent:', newAgent);
   return newAgent;
 };
 
@@ -91,8 +82,7 @@ export const createWorkflow = async (request: WorkflowRequest) => {
     }
     
     return await response.json();
-  } catch (error) {
-    console.error('Error creating workflow:', error);
+  } catch {
     // Fallback for development
     return { workflow_id: 'temp', status: 'running' as const };
   }
@@ -105,8 +95,7 @@ export const getWorkflowStatus = async (workflowId: string) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return await response.json();
-  } catch (error) {
-    console.error('Error getting workflow status:', error);
+  } catch {
     return { workflow_id: workflowId, status: 'completed' as const };
   }
 };
@@ -118,23 +107,17 @@ export const listWorkflows = async () => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     return await response.json();
-  } catch (error) {
-    console.error('Error listing workflows:', error);
+  } catch {
     return [];
   }
 };
 
 export const deleteWorkflow = async (workflowId: string) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error deleting workflow:', error);
-    throw error;
+  const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
+  return await response.json();
 };
