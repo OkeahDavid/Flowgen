@@ -1,12 +1,19 @@
 import axios from 'axios';
 import type { WorkflowRequest, WorkflowResponse, AgentType } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000';
+// Use environment variable for API URL, fallback to localhost
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Get demo token from environment variable (for production)
+const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN || '';
+
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    // Include authorization header if demo token is set
+    ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
   },
 });
 

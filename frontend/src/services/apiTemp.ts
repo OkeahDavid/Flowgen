@@ -1,6 +1,11 @@
 import type { WorkflowRequest, AgentConfig } from '../typesTemp';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const DEMO_TOKEN = import.meta.env.VITE_DEMO_TOKEN || '';
+
+// Debug logging
+console.log('[apiTemp] API_BASE_URL:', API_BASE_URL);
+console.log('[apiTemp] DEMO_TOKEN present:', !!DEMO_TOKEN);
 
 // Agent type configuration from backend
 export interface AgentTypeConfig {
@@ -15,7 +20,11 @@ export interface AgentTypesResponse {
 // Get available agent types and their default configurations
 export const getAgentTypes = async (): Promise<AgentTypesResponse> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/agent-types`);
+    const response = await fetch(`${API_BASE_URL}/agent-types`, {
+      headers: {
+        ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
+      },
+    });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -72,6 +81,7 @@ export const createWorkflow = async (request: WorkflowRequest) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
       },
       body: JSON.stringify(request),
     });

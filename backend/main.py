@@ -1,12 +1,13 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 import asyncio
 from datetime import datetime
 from sqlalchemy.orm import Session
+import logging
 
 # AutoGen imports
 from autogen_agentchat.messages import TextMessage
@@ -23,6 +24,13 @@ from db_service import WorkflowService
 # Load environment variables
 load_dotenv()
 
+# Setup logging for security monitoring
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Global storage for workflows
 workflows: Dict[str, Dict[str, Any]] = {}
 
@@ -30,9 +38,9 @@ workflows: Dict[str, Dict[str, Any]] = {}
 
 # Pydantic models for API
 class WorkflowRequest(BaseModel):
-    agents: List[AgentConfig]
-    connections: List[Connection]
-    task: str
+    agents: List[AgentConfig] = Field(..., max_length=20)  # Max 20 agents per workflow
+    connections: List[Connection] = Field(..., max_length=50)  # Max 50 connections
+    task: str = Field(..., min_length=1, max_length=2000)  # Max 2000 chars for task
 
 class WorkflowResponse(BaseModel):
     workflow_id: str
@@ -56,6 +64,35 @@ def create_openai_client():
     print(f"Creating OpenAI client with API key: {api_key[:10]}...")
     return OpenAIChatCompletionClient(model="gpt-4o-mini", api_key=api_key)
 
+def verify_demo_token(authorization: Optional[str] = Header(None)):
+    """Verify demo token for protected endpoints."""
+    demo_token = os.getenv("DEMO_TOKEN")
+    
+    # If no demo token is set, allow access (for local development)
+    if not demo_token:
+        logger.warning("No DEMO_TOKEN set - running in open mode. Set DEMO_TOKEN in production!")
+        return True
+    
+    # Check for token in Authorization header
+    if not authorization:
+        logger.warning("Missing authorization header")
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header required. Get demo token from project README or contact developer."
+        )
+    
+    # Support both "Bearer token" and just "token" formats
+    token = authorization.replace("Bearer ", "").strip()
+    
+    if token != demo_token:
+        logger.warning(f"Invalid token attempt from authorization header")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid demo token. Get demo token from project README or contact developer."
+        )
+    
+    return True
+
 # FastAPI app initialization
 app = FastAPI(
     title="Flowgen API",
@@ -63,10 +100,16 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Get allowed origins from environment or use defaults
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
+).split(",")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,  # Will include Netlify URL from env
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -161,8 +204,15 @@ async def get_agent_types():
     return AGENT_CONFIGS
 
 @app.post("/workflow/create", response_model=WorkflowResponse)
-async def create_workflow(request: WorkflowRequest):
+async def create_workflow(
+    request: WorkflowRequest,
+    req: Request,
+    _: bool = Depends(verify_demo_token)
+):
     """Create and execute a workflow with the specified agents and connections"""
+    # Log request for monitoring
+    logger.info(f"Workflow creation request from {req.client.host} - Task: {request.task[:50]}...")
+    
     db = SessionLocal()
     
     try:
@@ -412,10 +462,32 @@ async def delete_workflow(workflow_id: str):
     return {"message": f"Workflow {workflow_id} deleted successfully"}
 
 @app.post("/upload-documents")
-async def upload_documents(files: List[UploadFile] = File(...)):
+async def upload_documents(
+    files: List[UploadFile] = File(...),
+    req: Request = None,
+    _: bool = Depends(verify_demo_token)
+):
     """Upload and process documents for vector search."""
+    logger.info(f"Document upload from {req.client.host} - {len(files)} files")
+    
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
+    
+    # Limit total file size (10MB total)
+    total_size = 0
+    MAX_TOTAL_SIZE = 10 * 1024 * 1024  # 10MB
+    
+    for file in files:
+        file.file.seek(0, 2)  # Seek to end
+        file_size = file.file.tell()
+        file.file.seek(0)  # Reset to start
+        total_size += file_size
+        
+        if total_size > MAX_TOTAL_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Total file size exceeds limit of {MAX_TOTAL_SIZE // 1024 // 1024}MB"
+            )
     
     results = []
     
@@ -469,8 +541,9 @@ async def get_documents_info():
     return doc_processor.get_document_info()
 
 @app.post("/documents/search")
-async def search_documents(request: Dict[str, Any]):
+async def search_documents(request: Dict[str, Any], req: Request = None):
     """Search documents using vector similarity."""
+    logger.info(f"Document search from {req.client.host}")
     query = request.get("query", "")
     max_results = request.get("max_results", 5)
     filter_documents = request.get("filter_documents", None)  # Optional document filtering
