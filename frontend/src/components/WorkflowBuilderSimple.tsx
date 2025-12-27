@@ -213,7 +213,18 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
     }}>
       <AppBar position="static" sx={{ zIndex: 1000 }}>
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography 
+            variant="h6" 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8
+              }
+            }}
+            onClick={() => window.location.href = '/'}
+          >
             Flowgen
           </Typography>
           {currentTab === 0 && (
