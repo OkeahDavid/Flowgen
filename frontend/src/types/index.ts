@@ -1,7 +1,7 @@
 export interface AgentConfig {
   id: string;
   name: string;
-  type: 'web_search' | 'document_search' | 'summarizer';
+  type: 'web_search' | 'document_search' | 'summarizer' | 'creative_writer';
   system_message: string;
   position?: { x: number; y: number };
 }

@@ -3,7 +3,8 @@ import {
   Search as SearchIcon,
   Description as DocumentIcon,
   Summarize as SummaryIcon,
-  Add as AddIcon,
+  Edit as WriterIcon,
+  DragIndicator as DragIcon,
 } from '@mui/icons-material';
 
 interface AgentType {
@@ -12,6 +13,7 @@ interface AgentType {
   description: string;
   icon: React.ReactNode;
   color: string;
+  tag: string;
 }
 
 interface ClickableAgentItemProps {
@@ -28,39 +30,62 @@ const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAge
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('application/flowgen-agent', agent.id);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <Paper
+      elevation={0}
+      draggable
       onClick={handleClick}
+      onDragStart={handleDragStart}
       sx={{
         p: 2,
-        border: `2px dashed ${alpha(agent.color, 0.3)}`,
+        border: '1px solid',
+        borderColor: alpha(agent.color, 0.15),
         borderRadius: 2,
-        cursor: 'pointer',
+        cursor: 'grab',
         transition: 'all 0.2s ease',
         '&:hover': {
-          borderColor: agent.color,
-          borderStyle: 'solid',
+          borderColor: alpha(agent.color, 0.4),
           transform: 'translateY(-2px)',
-          boxShadow: `0 4px 12px ${alpha(agent.color, 0.2)}`,
+          boxShadow: `0 6px 20px ${alpha(agent.color, 0.12)}`,
         },
         '&:active': {
+          cursor: 'grabbing',
           transform: 'translateY(0px)',
-          boxShadow: `0 2px 8px ${alpha(agent.color, 0.3)}`,
-        }
+        },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Box sx={{ color: agent.color, mr: 1 }}>
+        <Box sx={{ color: agent.color, mr: 1.5 }}>
           {agent.icon}
         </Box>
-        <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1 }}>
-          {agent.name}
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle2" sx={{ 
+            fontWeight: 600, fontSize: '0.8rem', color: '#1a1a1a',
+            letterSpacing: 'normal', textTransform: 'none',
+          }}>
+            {agent.name}
+          </Typography>
+        </Box>
+        <Typography variant="caption" sx={{ 
+          color: agent.color, fontSize: '0.55rem', fontWeight: 600,
+          letterSpacing: '0.06em', textTransform: 'uppercase',
+          bgcolor: alpha(agent.color, 0.06), px: 0.8, py: 0.2,
+          borderRadius: 0.5,
+        }}>
+          {agent.tag}
         </Typography>
-        <AddIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-        {agent.description}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#5a6578', lineHeight: 1.4 }}>
+          {agent.description}
+        </Typography>
+        <DragIcon sx={{ color: alpha(agent.color, 0.3), fontSize: 16, ml: 1, flexShrink: 0 }} />
+      </Box>
     </Paper>
   );
 };
@@ -73,50 +98,78 @@ const AgentPalette: React.FC<AgentPaletteProps> = ({ onAddAgent }) => {
   const agentTypes: AgentType[] = [
     {
       id: 'web_search',
-      name: 'Web Search Agent',
-      description: 'Search the web for information',
+      name: 'Web Search',
+      description: 'Real-time web intelligence with source citations',
       icon: <SearchIcon />,
-      color: '#2196f3',
+      color: '#2d4a7a',
+      tag: 'Search',
     },
     {
       id: 'document_search',
-      name: 'Document Search Agent',
-      description: 'Search through documents',
+      name: 'Document Search',
+      description: 'Semantic vector search across uploaded files',
       icon: <DocumentIcon />,
-      color: '#ff9800',
+      color: '#c45d3e',
+      tag: 'RAG',
     },
     {
       id: 'summarizer',
-      name: 'Summarizer Agent',
-      description: 'Summarize information',
+      name: 'Summarizer',
+      description: 'Structured summaries that capture key insights',
       icon: <SummaryIcon />,
-      color: '#4caf50',
+      color: '#2e7d4f',
+      tag: 'Synthesis',
+    },
+    {
+      id: 'creative_writer',
+      name: 'Creative Writer',
+      description: 'Original content, stories, and compelling copy',
+      icon: <WriterIcon />,
+      color: '#7b5ea7',
+      tag: 'Generation',
     },
   ];
 
   return (
-    <Box sx={{ height: '100%', p: 3, bgcolor: 'background.default' }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: 'text.secondary' }}>
+    <Box sx={{ height: '100%', p: 2.5, bgcolor: '#faf8f5' }}>
+      <Typography variant="subtitle2" sx={{ 
+        color: '#c45d3e', mb: 0.5, fontSize: '0.65rem',
+        letterSpacing: '0.1em',
+      }}>
+        AGENTS
+      </Typography>
+      <Typography variant="h6" sx={{ 
+        fontFamily: '"Playfair Display", Georgia, serif',
+        fontWeight: 600, fontSize: '1.1rem', mb: 0.5, color: '#1a2b4a',
+      }}>
         Agent Palette
       </Typography>
-      <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary', fontSize: '0.85rem' }}>
-        Click to add agents to your workflow
+      <Typography variant="body2" sx={{ mb: 2.5, color: '#5a6578', fontSize: '0.78rem' }}>
+        Drag or click to add agents
       </Typography>
       
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         {agentTypes.map((agent) => (
           <ClickableAgentItem key={agent.id} agent={agent} onAddAgent={onAddAgent} />
         ))}
       </Box>
 
-      <Box sx={{ mt: 4, p: 2, bgcolor: alpha('#1976d2', 0.05), borderRadius: 2 }}>
-        <Typography variant="subtitle2" color="primary.main" gutterBottom sx={{ fontWeight: 600 }}>
-          How to use:
+      <Box sx={{ 
+        mt: 3, p: 2, 
+        bgcolor: 'rgba(26,43,74,0.03)', 
+        borderRadius: 2,
+        borderLeft: '2px solid rgba(26,43,74,0.1)',
+      }}>
+        <Typography variant="subtitle2" sx={{ 
+          fontWeight: 600, fontSize: '0.7rem', color: '#1a2b4a', mb: 0.5,
+          letterSpacing: 'normal', textTransform: 'none',
+        }}>
+          How to use
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.4 }}>
-          1. Click agents to add to canvas<br />
-          2. Drag agents to position them<br />
-          3. Click connection handles to link agents<br />
+        <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#5a6578', lineHeight: 1.5 }}>
+          1. Drag agents onto the canvas<br />
+          2. Or click to add at a random spot<br />
+          3. Click handles to connect agents<br />
           4. Configure and execute workflow
         </Typography>
       </Box>

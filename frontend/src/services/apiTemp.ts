@@ -67,49 +67,38 @@ export const createAgentFromType = async (type: string, position?: { x: number; 
 
 // Workflow API functions
 export const createWorkflow = async (request: WorkflowRequest) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflow/create`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
-      },
-      body: JSON.stringify(request),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch {
-    // Fallback for development
-    return { workflow_id: 'temp', status: 'running' as const };
+  const response = await fetch(`${API_BASE_URL}/workflow/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
+    },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(errorBody || `HTTP error ${response.status}`);
   }
+  
+  return await response.json();
 };
 
 export const getWorkflowStatus = async (workflowId: string) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch {
-    return { workflow_id: workflowId, status: 'completed' as const };
+  const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(errorBody || `HTTP error ${response.status}`);
   }
+  return await response.json();
 };
 
 export const listWorkflows = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflows`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch {
-    return [];
+  const response = await fetch(`${API_BASE_URL}/workflows`);
+  if (!response.ok) {
+    throw new Error(`HTTP error ${response.status}`);
   }
+  return await response.json();
 };
 
 export const deleteWorkflow = async (workflowId: string) => {
@@ -120,4 +109,94 @@ export const deleteWorkflow = async (workflowId: string) => {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
   return await response.json();
+};
+
+// SSE streaming types
+export interface StreamEvent {
+  type: string;
+  workflow_id?: string;
+  executor_id?: string;
+  message?: string;
+  content?: string;
+  chunk?: string;
+  source?: string;
+  error?: string;
+  iteration?: number;
+  result?: {
+    messages: Array<{ source: string; content: string }>;
+    total_events: number;
+    stop_reason: string;
+  };
+  data?: string;
+}
+
+export type StreamEventHandler = (event: StreamEvent) => void;
+
+/**
+ * Stream a workflow execution via SSE.
+ * Returns an AbortController so the caller can cancel.
+ */
+export const streamWorkflow = (
+  request: WorkflowRequest,
+  onEvent: StreamEventHandler,
+  onError: (error: Error) => void,
+  onDone: () => void,
+): AbortController => {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/workflow/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(body || `HTTP error ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // keep incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const event: StreamEvent = JSON.parse(trimmed.slice(6));
+              onEvent(event);
+            } catch {
+              // skip malformed JSON
+            }
+          }
+        }
+      }
+
+      onDone();
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        onError(err as Error);
+      }
+    }
+  })();
+
+  return controller;
 };

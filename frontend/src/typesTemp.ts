@@ -2,22 +2,9 @@ export interface AgentConfig {
   id: string;
   name: string;
   type: string;
-  system_message: string;
+  system_message?: string;
   position?: { x: number; y: number };
-  config?: {
-    // Web search config
-    searchQuery?: string;
-    maxResults?: number;
-    
-    // Document search config
-    uploadedFiles?: string[];
-    processingMode?: string;
-    
-    // Summarizer config
-    summaryType?: string;
-    summaryLength?: string;
-    focusAreas?: string[];
-  };
+  config?: Record<string, unknown>;
 }
 
 export interface Connection {
