@@ -3,6 +3,8 @@ import {
   Typography,
   Button,
   Paper,
+  AppBar,
+  Toolbar,
   alpha,
 } from '@mui/material';
 import {
@@ -79,6 +81,43 @@ const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
       overflow: 'auto',
       bgcolor: '#faf8f5',
     }}>
+      {/* Navbar */}
+      <AppBar position="sticky" sx={{ bgcolor: '#1a2b4a', boxShadow: '0 1px 8px rgba(26,43,74,0.12)' }}>
+        <Toolbar sx={{ minHeight: '48px !important', height: 48 }}>
+          <Typography 
+            variant="h6" 
+            sx={{ 
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontWeight: 600, fontSize: '1.1rem', letterSpacing: '-0.01em',
+              mr: 'auto',
+            }}
+          >
+            Flowgen
+          </Typography>
+          <Button 
+            color="inherit" size="small"
+            sx={{ fontSize: '0.8rem', color: '#fff' }}
+          >
+            Home
+          </Button>
+          <Button 
+            color="inherit" size="small"
+            onClick={onGetStarted}
+            sx={{ fontSize: '0.8rem', ml: 0.5, color: 'rgba(255,255,255,0.6)', '&:hover': { color: '#fff' } }}
+          >
+            Builder
+          </Button>
+          {onViewWorkflows && (
+            <Button 
+              color="inherit" size="small"
+              onClick={onViewWorkflows}
+              sx={{ fontSize: '0.8rem', ml: 0.5, color: 'rgba(255,255,255,0.6)', '&:hover': { color: '#fff' } }}
+            >
+              Workflows
+            </Button>
+          )}
+        </Toolbar>
+      </AppBar>
       {/* Hero Section */}
       <Box sx={{ 
 

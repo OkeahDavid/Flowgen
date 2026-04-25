@@ -288,52 +288,39 @@ async def execute_workflow(workflow_id: str, workflow, task: str):
         return str(obj)
 
     try:
-        # Run the Agent Framework Workflow using run_stream
-        events = []
-        output_data_collected = []
-        async for event in workflow.run_stream(task):
-            events.append(event)
-            # Collect output events (final results from terminal executors)
-            if hasattr(event, 'type') and event.type == 'output':
-                output_data_collected.append(event.data)
-
+        # Run the Agent Framework Workflow
+        result = await workflow.run(task)
+        
+        # result is a WorkflowRunResult (list of WorkflowEvent)
+        # Extract outputs using the built-in method
+        outputs = result.get_outputs()
+        
         # Format results with safe serialization
         safe_messages = []
-        for data in output_data_collected:
-            if isinstance(data, dict):
-                safe_messages.append({
-                    "source": str(data.get("source", "agent")),
-                    "content": str(data.get("content", "")),
-                    "type": "agent"
-                })
-            elif hasattr(data, 'text'):
-                safe_messages.append({
-                    "source": "agent",
-                    "content": str(data.text),
-                    "type": "agent"
-                })
-            else:
-                safe_messages.append({
-                    "source": "agent",
-                    "content": str(data),
-                    "type": "agent"
-                })
-
-        # If no output events were captured, extract from all events
+        for output in outputs:
+            safe_messages.append({
+                "source": "agent",
+                "content": str(output),
+                "type": "agent"
+            })
+        
+        # If no outputs captured, try extracting from events
         if not safe_messages:
-            for evt in events:
+            for evt in result:
                 try:
+                    evt_type = str(getattr(evt, 'type', 'event'))
+                    evt_data = getattr(evt, 'data', getattr(evt, 'text', str(evt)))
                     safe_messages.append({
-                        "source": str(getattr(evt, 'source', getattr(evt, 'type', 'unknown'))),
-                        "content": str(getattr(evt, 'data', getattr(evt, 'text', str(evt)))),
-                        "type": str(getattr(evt, 'type', 'event'))
+                        "source": str(getattr(evt, 'source', evt_type)),
+                        "content": str(evt_data),
+                        "type": evt_type
                     })
                 except Exception:
                     safe_messages.append({"source": "system", "content": str(evt), "type": "event"})
 
         result_data = {
             "messages": safe_messages,
-            "total_events": len(events),
+            "total_events": len(result),
             "stop_reason": "completed"
         }
 
@@ -345,7 +332,7 @@ async def execute_workflow(workflow_id: str, workflow, task: str):
         # Save execution to database with safe serialization
         from uuid import UUID
         safe_execution_log = []
-        for evt in events[:50]:
+        for evt in list(result)[:50]:
             try:
                 safe_execution_log.append({
                     "source": str(getattr(evt, 'type', 'event')),

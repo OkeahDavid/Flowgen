@@ -67,49 +67,38 @@ export const createAgentFromType = async (type: string, position?: { x: number; 
 
 // Workflow API functions
 export const createWorkflow = async (request: WorkflowRequest) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflow/create`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
-      },
-      body: JSON.stringify(request),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
-  } catch {
-    // Fallback for development
-    return { workflow_id: 'temp', status: 'running' as const };
+  const response = await fetch(`${API_BASE_URL}/workflow/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(DEMO_TOKEN && { 'Authorization': DEMO_TOKEN }),
+    },
+    body: JSON.stringify(request),
+  });
+  
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(errorBody || `HTTP error ${response.status}`);
   }
+  
+  return await response.json();
 };
 
 export const getWorkflowStatus = async (workflowId: string) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch {
-    return { workflow_id: workflowId, status: 'completed' as const };
+  const response = await fetch(`${API_BASE_URL}/workflow/${workflowId}`);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(errorBody || `HTTP error ${response.status}`);
   }
+  return await response.json();
 };
 
 export const listWorkflows = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workflows`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch {
-    return [];
+  const response = await fetch(`${API_BASE_URL}/workflows`);
+  if (!response.ok) {
+    throw new Error(`HTTP error ${response.status}`);
   }
+  return await response.json();
 };
 
 export const deleteWorkflow = async (workflowId: string) => {

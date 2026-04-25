@@ -4,7 +4,7 @@ import {
   Description as DocumentIcon,
   Summarize as SummaryIcon,
   Edit as WriterIcon,
-  Add as AddIcon,
+  DragIndicator as DragIcon,
 } from '@mui/icons-material';
 
 interface AgentType {
@@ -30,16 +30,23 @@ const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAge
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('application/flowgen-agent', agent.id);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <Paper
       elevation={0}
+      draggable
       onClick={handleClick}
+      onDragStart={handleDragStart}
       sx={{
         p: 2,
         border: '1px solid',
         borderColor: alpha(agent.color, 0.15),
         borderRadius: 2,
-        cursor: 'pointer',
+        cursor: 'grab',
         transition: 'all 0.2s ease',
         '&:hover': {
           borderColor: alpha(agent.color, 0.4),
@@ -47,6 +54,7 @@ const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAge
           boxShadow: `0 6px 20px ${alpha(agent.color, 0.12)}`,
         },
         '&:active': {
+          cursor: 'grabbing',
           transform: 'translateY(0px)',
         },
       }}
@@ -76,7 +84,7 @@ const ClickableAgentItem: React.FC<ClickableAgentItemProps> = ({ agent, onAddAge
         <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#5a6578', lineHeight: 1.4 }}>
           {agent.description}
         </Typography>
-        <AddIcon sx={{ color: alpha(agent.color, 0.4), fontSize: 16, ml: 1, flexShrink: 0 }} />
+        <DragIcon sx={{ color: alpha(agent.color, 0.3), fontSize: 16, ml: 1, flexShrink: 0 }} />
       </Box>
     </Paper>
   );
@@ -137,7 +145,7 @@ const AgentPalette: React.FC<AgentPaletteProps> = ({ onAddAgent }) => {
         Agent Palette
       </Typography>
       <Typography variant="body2" sx={{ mb: 2.5, color: '#5a6578', fontSize: '0.78rem' }}>
-        Click to add agents to your workflow
+        Drag or click to add agents
       </Typography>
       
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
@@ -159,8 +167,8 @@ const AgentPalette: React.FC<AgentPaletteProps> = ({ onAddAgent }) => {
           How to use
         </Typography>
         <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#5a6578', lineHeight: 1.5 }}>
-          1. Click agents to add to canvas<br />
-          2. Drag agents to position them<br />
+          1. Drag agents onto the canvas<br />
+          2. Or click to add at a random spot<br />
           3. Click handles to connect agents<br />
           4. Configure and execute workflow
         </Typography>

@@ -16,7 +16,7 @@ class AgentConfig(BaseModel):
     id: str
     name: str
     type: str
-    system_message: str
+    system_message: Optional[str] = None
     position: Optional[Dict[str, float]] = None
     config: Optional[Dict[str, Any]] = None
 

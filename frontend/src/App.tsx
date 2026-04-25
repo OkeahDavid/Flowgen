@@ -1,20 +1,7 @@
 import { useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { 
-  Box, 
-  Fab, 
-  Menu, 
-  MenuItem, 
-  ListItemIcon, 
-  ListItemText
-} from '@mui/material';
-import { 
-  Home as HomeIcon, 
-  ExpandLess as ExpandIcon,
-  AutoAwesome as BuilderIcon,
-  Visibility as ViewIcon
-} from '@mui/icons-material';
+import { Box } from '@mui/material';
 import Homepage from './components/Homepage';
 import WorkflowBuilder from './components/WorkflowBuilderSimple';
 
@@ -72,58 +59,18 @@ const theme = createTheme({
 function App() {
   const [currentView, setCurrentView] = useState<'homepage' | 'builder'>('homepage');
   const [workflowBuilderTab, setWorkflowBuilderTab] = useState<number>(0);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleGetStarted = () => { setCurrentView('builder'); setWorkflowBuilderTab(0); };
-  const handleNavigationClick = (event: React.MouseEvent<HTMLElement>) => { setAnchorEl(event.currentTarget); };
-  const handleNavigationClose = () => { setAnchorEl(null); };
-
-  const handleNavigateTo = (view: 'homepage' | 'builder' | 'management') => {
-    if (view === 'management') { setCurrentView('builder'); setWorkflowBuilderTab(1); }
-    else { setCurrentView(view as 'homepage' | 'builder'); if (view === 'builder') setWorkflowBuilderTab(0); }
-    handleNavigationClose();
-  };
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
         {currentView === 'homepage' ? (
-          <Homepage onGetStarted={handleGetStarted} onViewWorkflows={() => handleNavigateTo('management')} />
+          <Homepage onGetStarted={handleGetStarted} onViewWorkflows={() => { setCurrentView('builder'); setWorkflowBuilderTab(1); }} />
         ) : (
-          <>
-            <WorkflowBuilder initialTab={workflowBuilderTab} onHome={() => setCurrentView('homepage')} />
-            <Fab onClick={handleNavigationClick} sx={{
-              position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
-              bgcolor: '#1a2b4a', color: '#fff', width: 48, height: 48,
-              boxShadow: '0 4px 20px rgba(26,43,74,0.25)',
-              '&:hover': { bgcolor: '#2d4a7a', boxShadow: '0 6px 28px rgba(26,43,74,0.35)' },
-            }}>
-              <ExpandIcon />
-            </Fab>
-          </>
+          <WorkflowBuilder initialTab={workflowBuilderTab} onHome={() => setCurrentView('homepage')} />
         )}
-
-        <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleNavigationClose}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          PaperProps={{ sx: {
-            borderRadius: 2, boxShadow: '0 12px 40px rgba(26,43,74,0.12)',
-            border: '1px solid rgba(26,43,74,0.06)', minWidth: 220, mb: 1, py: 0.5,
-          }}}>
-          <MenuItem onClick={() => handleNavigateTo('homepage')} sx={{ py: 1.5 }}>
-            <ListItemIcon><HomeIcon fontSize="small" sx={{ color: '#1a2b4a' }} /></ListItemIcon>
-            <ListItemText primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}>Home</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleNavigateTo('builder')} sx={{ py: 1.5 }}>
-            <ListItemIcon><BuilderIcon fontSize="small" sx={{ color: '#c45d3e' }} /></ListItemIcon>
-            <ListItemText primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}>Workflow Builder</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleNavigateTo('management')} sx={{ py: 1.5 }}>
-            <ListItemIcon><ViewIcon fontSize="small" sx={{ color: '#5a6578' }} /></ListItemIcon>
-            <ListItemText primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}>View Workflows</ListItemText>
-          </MenuItem>
-        </Menu>
       </Box>
     </ThemeProvider>
   );
