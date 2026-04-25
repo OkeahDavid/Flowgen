@@ -35,8 +35,9 @@ import {
 
 import AgentPalette from './AgentPaletteTemp';
 import WorkflowCanvas from './WorkflowCanvasTemp';
-import WorkflowResults from './WorkflowResultsTemp';
-import type { AgentConfig, Connection, WorkflowRequest, WorkflowResponse } from '../typesTemp';
+import WorkflowResults from './WorkflowResults';
+import type { AgentConfig, Connection, WorkflowRequest } from '../typesTemp';
+import type { WorkflowResponse } from '../types';
 import { createWorkflow, getWorkflowStatus, createAgentFromType } from '../services/apiTemp';
 
 const WorkflowBuilder: React.FC = () => {

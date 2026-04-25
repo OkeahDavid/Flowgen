@@ -32,7 +32,7 @@ export interface WorkflowMessage {
 
 export interface WorkflowResponse {
   workflow_id: string;
-  status: string;
+  status: 'running' | 'completed' | 'error';
   error?: string;
   result?: {
     messages?: WorkflowMessage[];
