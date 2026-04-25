@@ -1,12 +1,16 @@
 """
 Agent creation and workflow building functionality.
+Migrated from AutoGen to Microsoft Agent Framework.
 """
 
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    pass
+from agent_framework import Agent, WorkflowBuilder, executor, WorkflowContext
+from agent_framework.openai import OpenAIChatCompletionClient
+from tools import get_web_search_tools, get_document_search_tools
+import os
+
 
 class AgentConfig(BaseModel):
     id: str
@@ -16,15 +20,10 @@ class AgentConfig(BaseModel):
     position: Optional[Dict[str, float]] = None
     config: Optional[Dict[str, Any]] = None
 
+
 class Connection(BaseModel):
     source_id: str
     target_id: str
-from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.teams import DiGraphBuilder, GraphFlow
-from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
-from autogen_ext.models.openai import OpenAIChatCompletionClient
-from tools import get_web_search_tools, get_document_search_tools
-import os
 
 
 # Agent type configurations
@@ -34,38 +33,37 @@ AGENT_CONFIGS = {
         "system_message": "You are a web search agent with access to current web search tools. When users ask for information, use the web search tool to find the most recent and up-to-date information from the internet. The search tool automatically includes current date context to ensure relevance. Always use your tools to provide current, accurate information with proper source citations."
     },
     "document_search": {
-        "name": "Document Search Agent", 
+        "name": "Document Search Agent",
         "system_message": "You MUST call the document_search_tool function for every user query. This is not optional. Documents are already uploaded in the system. Call document_search_tool(query='[user question]') first, then provide your answer based on the search results. Never respond without using the tool."
     },
     "summarizer": {
         "name": "Summarizer Agent",
         "system_message": "You are a summarizer agent. Take the provided information and create concise, well-structured summaries that capture the key points. Focus on clarity and completeness while maintaining brevity."
+    },
+    "creative_writer": {
+        "name": "Creative Writer Agent",
+        "system_message": "You are a creative writer agent. Generate compelling, original content including articles, stories, marketing copy, blog posts, and creative writing. Focus on engaging prose, vivid descriptions, and strong narrative structure. Adapt your tone and style to match the context and audience."
     }
 }
 
 
-# Note: AgentConfig and Connection are defined as Pydantic models in main.py
-# We'll work with the Pydantic models directly
-
-
-def create_agent(agent_config: AgentConfig, client: OpenAIChatCompletionClient) -> AssistantAgent:
-    """Create an AutoGen AssistantAgent with OpenAI-powered tools"""
+def create_agent(agent_config: AgentConfig, client: OpenAIChatCompletionClient) -> Agent:
+    """Create an Agent Framework Agent with tools based on type"""
     base_config = AGENT_CONFIGS.get(agent_config.type, {})
     system_message = agent_config.system_message or base_config.get("system_message", "You are a helpful AI assistant.")
-    
-    print(f"Creating AssistantAgent {agent_config.id} of type {agent_config.type}")
-    print(f"System message: {system_message[:100]}...")
-    
+
+    print(f"Creating Agent {agent_config.id} of type {agent_config.type}")
+    print(f"Instructions: {system_message[:100]}...")
+
     # Get tools based on agent type
     tools = []
     if agent_config.type == "web_search":
         tools = get_web_search_tools()
         print(f"Adding OpenAI-powered web search tools to agent {agent_config.id}")
-        
-        # Enhanced system message for web search
+
         from datetime import datetime
         current_date = datetime.now().strftime("%B %d, %Y")
-        
+
         system_message = f"""You are a web search specialist with access to current web search capabilities.
 
 CURRENT DATE: {current_date}
@@ -79,20 +77,18 @@ INSTRUCTIONS:
 6. If search results are insufficient, explain what you found
 
 You have access to real-time web search that prioritizes current information."""
-        
+
     elif agent_config.type == "document_search":
-        # Get selected documents from agent configuration
         selected_documents = None
         if agent_config.config and agent_config.config.get("uploadedFiles"):
             selected_documents = agent_config.config["uploadedFiles"]
             print(f"Agent {agent_config.id} configured to search {len(selected_documents)} specific documents: {selected_documents}")
         else:
             print(f"Agent {agent_config.id} will search all available documents")
-        
+
         tools = get_document_search_tools(selected_documents)
         print(f"Adding document search tools to agent {agent_config.id}")
-        
-        # Enhanced system message for document search
+
         if selected_documents:
             doc_list = ", ".join(selected_documents)
             system_message = f"""You are a document search specialist with access to specific uploaded documents: {doc_list}.
@@ -116,61 +112,91 @@ CRITICAL INSTRUCTIONS:
 5. If no relevant information is found, state this clearly
 
 You have access to uploaded documents and must search them for all queries."""
-    
+
     try:
-        agent = AssistantAgent(
+        agent = Agent(
             name=agent_config.id,
-            model_client=client,
-            system_message=system_message,
+            client=client,
+            instructions=system_message,
             tools=tools if tools else None,
-            reflect_on_tool_use=True,
-            max_tool_iterations=3
         )
-        print(f"Successfully created AssistantAgent {agent_config.id} with {len(tools)} tools")
+        print(f"Successfully created Agent {agent_config.id} with {len(tools)} tools")
         return agent
     except Exception as e:
         print(f"Error creating agent {agent_config.id}: {str(e)}")
         raise
 
 
-def build_workflow_team(agents: List[AgentConfig], connections: List[Connection], client: OpenAIChatCompletionClient):
-    """Build AutoGen GraphFlow team from agent configuration"""
-    # Create agents
-    agent_instances = []
-    agent_map = {}
+def build_workflow(agents: List[AgentConfig], connections: List[Connection], client: OpenAIChatCompletionClient):
+    """Build Agent Framework Workflow from agent configuration.
     
+    Translates the user's visual graph (agents + connections) into a
+    WorkflowBuilder with executor functions wrapping each Agent.
+    """
+    # Create agent instances
+    agent_instances = {}
     for agent_config in agents:
         agent = create_agent(agent_config, client)
-        agent_instances.append(agent)
-        agent_map[agent_config.id] = agent
+        agent_instances[agent_config.id] = agent
 
-    # Build graph
-    builder = DiGraphBuilder()
-    
-    # Add agents to graph
-    for agent in agent_instances:
-        builder.add_node(agent)
-    
-    # Add connections
-    for connection in connections:
-        source_agent = agent_map.get(connection.source_id)
-        target_agent = agent_map.get(connection.target_id)
-        
-        if source_agent and target_agent:
-            builder.add_edge(source_agent, target_agent)
-            print(f"Adding edge: {connection.source_id} -> {connection.target_id}")
+    # Determine graph topology
+    # Find which agents have no incoming connections (entry points)
+    targets = {conn.target_id for conn in connections}
+    sources = {conn.source_id for conn in connections}
+    entry_points = [aid for aid in agent_instances if aid not in targets]
+    # Agents with no outgoing connections are terminal nodes
+    terminal_nodes = {aid for aid in agent_instances if aid not in sources}
+
+    if not entry_points:
+        # If all agents have incoming connections, use the first agent as entry
+        entry_points = [agents[0].id]
+
+    # Build adjacency list
+    adjacency: Dict[str, List[str]] = {}
+    for conn in connections:
+        adjacency.setdefault(conn.source_id, []).append(conn.target_id)
+
+    # Create executor functions for each agent
+    executors = {}
+
+    for agent_id, agent_inst in agent_instances.items():
+        is_terminal = agent_id in terminal_nodes
+        downstream = adjacency.get(agent_id, [])
+
+        # Create executor with closure over agent and routing info
+        exec_fn = _make_executor(agent_id, agent_inst, is_terminal, downstream)
+        executors[agent_id] = exec_fn
+
+    # Build the workflow
+    start_exec = executors[entry_points[0]]
+    builder = WorkflowBuilder(start_executor=start_exec)
+
+    # Add edges based on connections
+    for conn in connections:
+        src_exec = executors.get(conn.source_id)
+        tgt_exec = executors.get(conn.target_id)
+        if src_exec and tgt_exec:
+            builder.add_edge(src_exec, tgt_exec)
+            print(f"Adding edge: {conn.source_id} -> {conn.target_id}")
         else:
-            print(f"Warning: Could not find agents for connection {connection.source_id} -> {connection.target_id}")
-    
-    # Add termination conditions
-    termination = MaxMessageTermination(max_messages=20)
-    
-    # Create the GraphFlow team
-    team = GraphFlow(
-        participants=agent_instances,
-        graph=builder.build(),
-        termination_condition=termination
-    )
-    
-    print(f"Built workflow team with {len(agent_instances)} agents and {len(connections)} connections")
-    return team, agent_instances
+            print(f"Warning: Could not find executors for connection {conn.source_id} -> {conn.target_id}")
+
+    workflow = builder.build()
+    print(f"Built workflow with {len(agent_instances)} agents and {len(connections)} connections")
+    return workflow, list(agent_instances.values())
+
+
+def _make_executor(agent_id: str, agent_inst: Agent, is_terminal: bool, downstream: List[str]):
+    """Create an executor function for a specific agent."""
+    if is_terminal:
+        @executor(id=agent_id)
+        async def terminal_exec(input_msg: str, ctx: WorkflowContext) -> None:
+            result = await agent_inst.run(input_msg)
+            await ctx.yield_output({"source": agent_id, "content": result.text})
+        return terminal_exec
+    else:
+        @executor(id=agent_id)
+        async def relay_exec(input_msg: str, ctx: WorkflowContext) -> None:
+            result = await agent_inst.run(input_msg)
+            await ctx.send_message(result.text)
+        return relay_exec

@@ -209,7 +209,7 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
       flexDirection: 'column',
       overflow: 'hidden'
     }}>
-      <AppBar position="static" sx={{ zIndex: 1000 }}>
+      <AppBar position="static" sx={{ zIndex: 1000, bgcolor: '#1a2b4a', boxShadow: '0 1px 8px rgba(26,43,74,0.12)' }}>
         <Toolbar>
           <Typography 
             variant="h6" 
@@ -217,6 +217,9 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
             sx={{ 
               flexGrow: 1,
               cursor: 'pointer',
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
               '&:hover': {
                 opacity: 0.8
               }
@@ -252,8 +255,14 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
       </AppBar>
 
       {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-        <Tabs value={currentTab} onChange={handleTabChange} centered>
+      <Box sx={{ borderBottom: 1, borderColor: 'rgba(26,43,74,0.08)', bgcolor: '#faf8f5' }}>
+        <Tabs value={currentTab} onChange={handleTabChange} centered
+          sx={{
+            '& .MuiTab-root': { color: '#5a6578' },
+            '& .Mui-selected': { color: '#1a2b4a' },
+            '& .MuiTabs-indicator': { bgcolor: '#c45d3e', height: 2 },
+          }}
+        >
           <Tab 
             icon={<BuilderIcon />} 
             label="Workflow Builder" 

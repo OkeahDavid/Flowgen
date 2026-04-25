@@ -9,12 +9,11 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 import logging
 
-# AutoGen imports
-from autogen_agentchat.messages import TextMessage
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+# Agent Framework imports
+from agent_framework.openai import OpenAIChatCompletionClient
 
 # Local imports
-from agents import AGENT_CONFIGS, AgentConfig, Connection, build_workflow_team
+from agents import AGENT_CONFIGS, AgentConfig, Connection, build_workflow
 from document_service import get_document_processor
 from database import get_db, init_db, SessionLocal
 from api_routes import router as api_router
@@ -215,13 +214,13 @@ async def create_workflow(
         # Create OpenAI client
         client = create_openai_client()
         
-        # Build workflow team
-        team, agent_instances = build_workflow_team(request.agents, request.connections, client)
+        # Build workflow
+        workflow, agent_instances = build_workflow(request.agents, request.connections, client)
         
         # Save workflow to database
         workflow_data = {
-            "agents": [agent.dict() for agent in request.agents],
-            "connections": [conn.dict() for conn in request.connections],
+            "agents": [agent.model_dump() for agent in request.agents],
+            "connections": [conn.model_dump() for conn in request.connections],
             "task": request.task
         }
         
@@ -244,13 +243,13 @@ async def create_workflow(
             "connections": request.connections,
             "task": request.task,
             "created_at": datetime.now().isoformat(),
-            "team": team,
+            "workflow": workflow,
             "agent_instances": agent_instances,
             "db_id": db_workflow.id
         }
         
         # Execute workflow asynchronously
-        asyncio.create_task(execute_workflow(workflow_id, team, request.task))
+        asyncio.create_task(execute_workflow(workflow_id, workflow, request.task))
         
         return WorkflowResponse(
             workflow_id=workflow_id,
@@ -269,11 +268,11 @@ async def create_workflow(
     finally:
         db.close()
 
-async def execute_workflow(workflow_id: str, team, task: str):
+async def execute_workflow(workflow_id: str, workflow, task: str):
     """Execute workflow asynchronously and store results"""
     db = SessionLocal()
     started_at = datetime.now()
-    
+
     def make_json_serializable(obj):
         """Convert complex objects to JSON-serializable format."""
         if obj is None:
@@ -285,58 +284,77 @@ async def execute_workflow(workflow_id: str, team, task: str):
         if isinstance(obj, dict):
             return {k: make_json_serializable(v) for k, v in obj.items()}
         if hasattr(obj, '__dict__'):
-            # Convert objects with attributes to dict
             return {k: make_json_serializable(v) for k, v in obj.__dict__.items() if not k.startswith('_')}
-        # Fallback to string representation
         return str(obj)
-    
+
     try:
-        # Run the GraphFlow workflow using run_stream
-        messages = []
-        async for event in team.run_stream(task=task):
-            messages.append(event)
-        
-        
+        # Run the Agent Framework Workflow using run_stream
+        events = []
+        output_data_collected = []
+        async for event in workflow.run_stream(task):
+            events.append(event)
+            # Collect output events (final results from terminal executors)
+            if hasattr(event, 'type') and event.type == 'output':
+                output_data_collected.append(event.data)
+
         # Format results with safe serialization
         safe_messages = []
-        for msg in messages:
-            safe_msg = {
-                "source": str(getattr(msg, 'source', 'unknown')),
-                "content": str(getattr(msg, 'content', '')),
-                "type": str(getattr(msg, 'type', 'text'))
-            }
-            # Safely handle models_usage if it exists
-            if hasattr(msg, 'models_usage') and msg.models_usage:
+        for data in output_data_collected:
+            if isinstance(data, dict):
+                safe_messages.append({
+                    "source": str(data.get("source", "agent")),
+                    "content": str(data.get("content", "")),
+                    "type": "agent"
+                })
+            elif hasattr(data, 'text'):
+                safe_messages.append({
+                    "source": "agent",
+                    "content": str(data.text),
+                    "type": "agent"
+                })
+            else:
+                safe_messages.append({
+                    "source": "agent",
+                    "content": str(data),
+                    "type": "agent"
+                })
+
+        # If no output events were captured, extract from all events
+        if not safe_messages:
+            for evt in events:
                 try:
-                    safe_msg["models_usage"] = make_json_serializable(msg.models_usage)
-                except:
-                    safe_msg["models_usage"] = str(msg.models_usage)
-            safe_messages.append(safe_msg)
-        
+                    safe_messages.append({
+                        "source": str(getattr(evt, 'source', getattr(evt, 'type', 'unknown'))),
+                        "content": str(getattr(evt, 'data', getattr(evt, 'text', str(evt)))),
+                        "type": str(getattr(evt, 'type', 'event'))
+                    })
+                except Exception:
+                    safe_messages.append({"source": "system", "content": str(evt), "type": "event"})
+
         result_data = {
             "messages": safe_messages,
-            "total_events": len(messages),
+            "total_events": len(events),
             "stop_reason": "completed"
         }
-        
+
         # Store results in memory
         workflows[workflow_id]["status"] = "completed"
         workflows[workflow_id]["result"] = result_data
         workflows[workflow_id]["completed_at"] = datetime.now().isoformat()
-        
+
         # Save execution to database with safe serialization
         from uuid import UUID
         safe_execution_log = []
-        for msg in messages[:50]:  # Limit log size
+        for evt in events[:50]:
             try:
                 safe_execution_log.append({
-                    "source": str(getattr(msg, 'source', 'unknown')),
-                    "content": str(getattr(msg, 'content', ''))[:500],  # Truncate long content
-                    "type": str(getattr(msg, 'type', 'text'))
+                    "source": str(getattr(evt, 'type', 'event')),
+                    "content": str(getattr(evt, 'data', ''))[:500],
+                    "type": str(getattr(evt, 'type', 'event'))
                 })
-            except:
-                safe_execution_log.append({"event": str(msg)[:500]})
-        
+            except Exception:
+                safe_execution_log.append({"event": str(evt)[:500]})
+
         WorkflowService.record_execution(
             db=db,
             workflow_id=UUID(workflow_id),
@@ -347,7 +365,7 @@ async def execute_workflow(workflow_id: str, team, task: str):
             output_data=result_data,
             execution_log=safe_execution_log
         )
-        
+
         # Update workflow status to completed
         WorkflowService.update_workflow(
             db=db,

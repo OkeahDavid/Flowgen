@@ -1,11 +1,11 @@
 # Flowgen Backend
 
-A FastAPI-based backend for the Flowgen workflow management system that enables AI agent orchestration, document processing, and multi-agent conversations using AutoGen and OpenAI.
+A FastAPI-based backend for the Flowgen workflow management system that enables AI agent orchestration, document processing, and multi-agent conversations using Microsoft Agent Framework and OpenAI.
 
 ## Features
 
 ### 🤖 Agent Management
-- **Multi-Agent Workflows**: Create and orchestrate multiple AI agents using AutoGen 0.7+
+- **Multi-Agent Workflows**: Create and orchestrate multiple AI agents using Microsoft Agent Framework 1.2+
 - **Agent Types**: Support for document search, summarizer, and custom agent types
 - **Tool Integration**: Agents can use tools like document search and web search
 - **OpenAI Integration**: Seamless integration with OpenAI's GPT models and embeddings
@@ -41,7 +41,7 @@ backend/
 
 ### Key Technologies
 - **FastAPI**: Modern async web framework
-- **AutoGen 0.7+**: Multi-agent conversation framework
+- **Agent Framework 1.2+**: Multi-agent workflow orchestration framework
 - **OpenAI API**: GPT models and text embeddings
 - **scikit-learn**: Cosine similarity for vector search
 - **NumPy**: Efficient array operations for embeddings
@@ -165,7 +165,7 @@ curl -X POST "http://localhost:8000/documents/search" \
 ## Development
 
 ### Project Structure
-- **agents.py**: AutoGen agent creation and configuration
+- **agents.py**: Agent Framework agent creation and workflow configuration
 - **tools.py**: Function definitions for agent tools
 - **document_processor.py**: Document upload, chunking, and search
 - **main.py**: FastAPI routes and application setup

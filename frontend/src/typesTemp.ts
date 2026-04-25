@@ -17,6 +17,11 @@ export interface AgentConfig {
     summaryType?: string;
     summaryLength?: string;
     focusAreas?: string[];
+
+    // Creative writer config
+    writingStyle?: string;
+    contentType?: string;
+    targetAudience?: string;
   };
 }
 

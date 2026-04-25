@@ -124,7 +124,7 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
   const getMessageIcon = (source: string) => {
     if (source === 'user') {
       return <PersonIcon fontSize="small" color="primary" />;
-    } else if (source === 'unknown' || source === 'DiGraphStopAgent') {
+    } else if (source === 'unknown' || source === 'system') {
       return <BotIcon fontSize="small" color="disabled" />;
     } else {
       return <BotIcon fontSize="small" color="secondary" />;
@@ -132,11 +132,16 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
   };
 
   return (
-    <Box sx={{ height: '100%', p: 3, bgcolor: 'background.default', overflow: 'auto' }}>
+    <Box sx={{ height: '100%', p: 3, bgcolor: '#faf8f5', overflow: 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          Workflow Results
-        </Typography>
+        <Box>
+          <Typography variant="subtitle2" sx={{ color: '#c45d3e', fontSize: '0.65rem', letterSpacing: '0.1em', mb: 0.5 }}>
+            OUTPUT
+          </Typography>
+          <Typography variant="h6" sx={{ fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600, fontSize: '1.1rem', color: '#1a2b4a' }}>
+            Workflow Results
+          </Typography>
+        </Box>
         {currentResponse?.workflow_id && (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <IconButton 
@@ -358,11 +363,11 @@ const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: Workflo
                               color: message.source === 'user' ? 'primary.main' : 'text.primary'
                             }}
                             title={message.source === 'user' ? 'User Input' : 
-                                   message.source === 'DiGraphStopAgent' ? 'System' :
+                                   message.source === 'system' ? 'System' :
                                    `Agent: ${message.source}`}
                           >
                             {message.source === 'user' ? 'User Input' : 
-                             message.source === 'DiGraphStopAgent' ? 'System' :
+                             message.source === 'system' ? 'System' :
                              message.source.length > 30 ? `Agent: ${message.source.substring(0, 30)}...` : `Agent: ${message.source}`}
                           </Typography>
                         </Box>

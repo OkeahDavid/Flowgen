@@ -209,7 +209,7 @@ const WorkflowManagement: React.FC = () => {
   const getMessageIcon = (source: string) => {
     if (source === 'user') {
       return <PersonIcon fontSize="small" color="primary" />;
-    } else if (source === 'unknown' || source === 'DiGraphStopAgent') {
+    } else if (source === 'unknown' || source === 'system') {
       return <BotIcon fontSize="small" color="disabled" />;
     } else {
       return <BotIcon fontSize="small" color="secondary" />;
@@ -245,11 +245,16 @@ const WorkflowManagement: React.FC = () => {
   }
 
   return (
-    <Box sx={{ height: '100%', p: 3, overflow: 'auto' }}>
+    <Box sx={{ height: '100%', p: 3, overflow: 'auto', bgcolor: '#faf8f5' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Workflow Management
-        </Typography>
+        <Box>
+          <Typography variant="subtitle2" sx={{ color: '#c45d3e', fontSize: '0.65rem', letterSpacing: '0.1em', mb: 0.5 }}>
+            HISTORY
+          </Typography>
+          <Typography variant="h4" sx={{ fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600, color: '#1a2b4a' }}>
+            Workflow Management
+          </Typography>
+        </Box>
         <Button
           variant="outlined"
           startIcon={<RefreshIcon />}
@@ -433,7 +438,7 @@ const WorkflowManagement: React.FC = () => {
                               {getMessageIcon(message.source)}
                               <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
                                 {message.source === 'user' ? 'User Input' : 
-                                 message.source === 'DiGraphStopAgent' ? 'System' :
+                                 message.source === 'system' ? 'System' :
                                  `Agent: ${message.source}`}
                               </Typography>
                               <Chip

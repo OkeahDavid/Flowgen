@@ -29,6 +29,7 @@ import {
   Search as SearchIcon,
   Description as DocumentIcon,
   Summarize as SummaryIcon,
+  Edit as WriterIcon,
   MoreVert as MoreVertIcon,
   Close as CloseIcon,
   CloudUpload as CloudUploadIcon,
@@ -495,6 +496,69 @@ const AgentSummarizerConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) 
   );
 };
 
+const AgentCreativeWriterConfig: React.FC<AgentConfigProps> = ({ agent, onUpdate }) => {
+  const [writingStyle, setWritingStyle] = useState(agent.config?.writingStyle || 'narrative');
+  const [contentType, setContentType] = useState(agent.config?.contentType || 'article');
+  const [targetAudience, setTargetAudience] = useState(agent.config?.targetAudience || '');
+
+  const handleStyleChange = (event: SelectChangeEvent) => {
+    const style = event.target.value;
+    setWritingStyle(style);
+    onUpdate({ config: { ...agent.config, writingStyle: style, contentType, targetAudience } });
+  };
+
+  const handleContentTypeChange = (event: SelectChangeEvent) => {
+    const type = event.target.value;
+    setContentType(type);
+    onUpdate({ config: { ...agent.config, writingStyle, contentType: type, targetAudience } });
+  };
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Divider sx={{ mb: 2 }}>
+        <Chip label="Creative Writer Configuration" size="small" sx={{ bgcolor: '#7b5ea7', color: '#fff' }} />
+      </Divider>
+
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Writing Style</InputLabel>
+        <Select value={writingStyle} label="Writing Style" onChange={handleStyleChange}>
+          <MenuItem value="narrative">Narrative</MenuItem>
+          <MenuItem value="persuasive">Persuasive</MenuItem>
+          <MenuItem value="informational">Informational</MenuItem>
+          <MenuItem value="conversational">Conversational</MenuItem>
+          <MenuItem value="academic">Academic</MenuItem>
+          <MenuItem value="creative">Creative / Literary</MenuItem>
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth sx={{ mb: 2 }}>
+        <InputLabel>Content Type</InputLabel>
+        <Select value={contentType} label="Content Type" onChange={handleContentTypeChange}>
+          <MenuItem value="article">Article</MenuItem>
+          <MenuItem value="blog_post">Blog Post</MenuItem>
+          <MenuItem value="story">Story</MenuItem>
+          <MenuItem value="email">Email</MenuItem>
+          <MenuItem value="marketing_copy">Marketing Copy</MenuItem>
+          <MenuItem value="script">Script</MenuItem>
+        </Select>
+      </FormControl>
+
+      <TextField
+        fullWidth
+        label="Target Audience"
+        variant="outlined"
+        value={targetAudience}
+        onChange={(e) => {
+          setTargetAudience(e.target.value);
+          onUpdate({ config: { ...agent.config, writingStyle, contentType, targetAudience: e.target.value } });
+        }}
+        placeholder="e.g. technical professionals, general public..."
+        helperText="Describe who the content is intended for"
+      />
+    </Box>
+  );
+};
+
 interface WorkflowCanvasProps {
   agents: AgentConfig[];
   connections: Connection[];
@@ -523,6 +587,8 @@ const getAgentIcon = (type: string) => {
       return <DocumentIcon />;
     case 'summarizer':
       return <SummaryIcon />;
+    case 'creative_writer':
+      return <WriterIcon />;
     default:
       return <SearchIcon />;
   }
@@ -531,13 +597,15 @@ const getAgentIcon = (type: string) => {
 const getAgentColor = (type: string) => {
   switch (type) {
     case 'web_search':
-      return '#2196f3';
+      return '#2d4a7a';
     case 'document_search':
-      return '#ff9800';
+      return '#c45d3e';
     case 'summarizer':
-      return '#4caf50';
+      return '#2e7d4f';
+    case 'creative_writer':
+      return '#7b5ea7';
     default:
-      return '#2196f3';
+      return '#2d4a7a';
   }
 };
 
@@ -1026,6 +1094,17 @@ const AgentNode: React.FC<AgentNodeProps> = ({
                 />
               </Paper>
             )}
+
+            {agent.type === 'creative_writer' && (
+              <Paper sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: alpha(getAgentColor(agent.type), 0.2) }}>
+                <AgentCreativeWriterConfig 
+                  agent={agent} 
+                  onUpdate={(updates) => {
+                    onUpdate(agent.id, updates);
+                  }}
+                />
+              </Paper>
+            )}
           </Box>
         </DialogContent>
         
@@ -1125,8 +1204,8 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         height: '100%', 
         width: '100%',
         position: 'relative',
-        bgcolor: connectingFrom ? alpha('#ff5722', 0.05) : '#fafafa',
-        backgroundImage: 'radial-gradient(circle, #e0e0e0 1px, transparent 1px)',
+        bgcolor: connectingFrom ? alpha('#c45d3e', 0.04) : '#faf8f5',
+        backgroundImage: 'radial-gradient(circle, rgba(26,43,74,0.06) 1px, transparent 1px)',
         backgroundSize: '20px 20px',
         transition: 'background-color 0.2s ease',
         overflow: 'hidden',
@@ -1217,7 +1296,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   {/* Glow effect background */}
                   <path
                     d={pathData}
-                    stroke="rgba(33, 150, 243, 0.2)"
+                    stroke="rgba(26, 43, 74, 0.15)"
                     strokeWidth="8"
                     fill="none"
                     style={{
@@ -1239,7 +1318,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <circle
                     r="4"
                     fill="#ffffff"
-                    stroke="#2196f3"
+                    stroke="#1a2b4a"
                     strokeWidth="2"
                     style={{
                       filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))',
@@ -1259,9 +1338,9 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             <defs>
               {/* Gradient for connection lines */}
               <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style={{stopColor: '#2196f3', stopOpacity: 0.8}} />
-                <stop offset="50%" style={{stopColor: '#1976d2', stopOpacity: 1}} />
-                <stop offset="100%" style={{stopColor: '#0d47a1', stopOpacity: 0.9}} />
+                <stop offset="0%" style={{stopColor: '#2d4a7a', stopOpacity: 0.8}} />
+                <stop offset="50%" style={{stopColor: '#1a2b4a', stopOpacity: 1}} />
+                <stop offset="100%" style={{stopColor: '#0d1b30', stopOpacity: 0.9}} />
               </linearGradient>
               
               {/* Modern arrowhead */}
@@ -1277,7 +1356,7 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 <path
                   d="M 0 0 L 16 6 L 0 12 L 4 6 Z"
                   fill="url(#arrowGradient)"
-                  stroke="#0d47a1"
+                  stroke="#0d1b30"
                   strokeWidth="0.5"
                   style={{
                     filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.2))',
@@ -1287,8 +1366,8 @@ const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               
               {/* Gradient for arrowhead */}
               <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style={{stopColor: '#1976d2', stopOpacity: 1}} />
-                <stop offset="100%" style={{stopColor: '#0d47a1', stopOpacity: 1}} />
+                <stop offset="0%" style={{stopColor: '#1a2b4a', stopOpacity: 1}} />
+                <stop offset="100%" style={{stopColor: '#0d1b30', stopOpacity: 1}} />
               </linearGradient>
             </defs>
           </svg>

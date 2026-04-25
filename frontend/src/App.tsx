@@ -22,17 +22,50 @@ const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1976d2',
+      main: '#1a2b4a',
+      light: '#2d4a7a',
+      dark: '#0d1b30',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#c45d3e',
+      light: '#e07a5f',
+      dark: '#a04030',
     },
+    background: {
+      default: '#faf8f5',
+      paper: '#ffffff',
+    },
+    text: {
+      primary: '#1a1a1a',
+      secondary: '#5a6578',
+    },
+    divider: 'rgba(26, 43, 74, 0.08)',
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"DM Sans", "Helvetica Neue", sans-serif',
+    h1: { fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 700, letterSpacing: '-0.02em' },
+    h2: { fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600, letterSpacing: '-0.01em' },
+    h3: { fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 },
+    h4: { fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 500 },
+    h5: { fontFamily: '"DM Sans", sans-serif', fontWeight: 600 },
+    h6: { fontFamily: '"DM Sans", sans-serif', fontWeight: 600 },
+    subtitle1: { fontFamily: '"DM Sans", sans-serif', fontWeight: 500, letterSpacing: '0.02em' },
+    subtitle2: { fontFamily: '"DM Sans", sans-serif', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const, fontSize: '0.7rem' },
+    body1: { fontFamily: '"DM Sans", sans-serif', lineHeight: 1.7 },
+    body2: { fontFamily: '"DM Sans", sans-serif', lineHeight: 1.6 },
+    button: { fontFamily: '"DM Sans", sans-serif', fontWeight: 600, letterSpacing: '0.03em' },
   },
-  shape: {
-    borderRadius: 12,
+  shape: { borderRadius: 8 },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: { textTransform: 'none', borderRadius: 6, padding: '8px 20px' },
+        contained: { boxShadow: 'none', '&:hover': { boxShadow: '0 2px 8px rgba(26,43,74,0.15)' } },
+        outlined: { borderWidth: '1.5px', '&:hover': { borderWidth: '1.5px' } },
+      },
+    },
+    MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
+    MuiChip: { styleOverrides: { root: { fontWeight: 500 } } },
   },
 });
 
@@ -41,29 +74,13 @@ function App() {
   const [workflowBuilderTab, setWorkflowBuilderTab] = useState<number>(0);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleGetStarted = () => {
-    setCurrentView('builder');
-    setWorkflowBuilderTab(0);
-  };
-
-  const handleNavigationClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleNavigationClose = () => {
-    setAnchorEl(null);
-  };
+  const handleGetStarted = () => { setCurrentView('builder'); setWorkflowBuilderTab(0); };
+  const handleNavigationClick = (event: React.MouseEvent<HTMLElement>) => { setAnchorEl(event.currentTarget); };
+  const handleNavigationClose = () => { setAnchorEl(null); };
 
   const handleNavigateTo = (view: 'homepage' | 'builder' | 'management') => {
-    if (view === 'management') {
-      setCurrentView('builder');
-      setWorkflowBuilderTab(1);
-    } else {
-      setCurrentView(view as 'homepage' | 'builder');
-      if (view === 'builder') {
-        setWorkflowBuilderTab(0);
-      }
-    }
+    if (view === 'management') { setCurrentView('builder'); setWorkflowBuilderTab(1); }
+    else { setCurrentView(view as 'homepage' | 'builder'); if (view === 'builder') setWorkflowBuilderTab(0); }
     handleNavigationClose();
   };
 
@@ -72,76 +89,39 @@ function App() {
       <CssBaseline />
       <Box sx={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
         {currentView === 'homepage' ? (
-          <Homepage 
-            onGetStarted={handleGetStarted} 
-            onViewWorkflows={() => handleNavigateTo('management')}
-          />
+          <Homepage onGetStarted={handleGetStarted} onViewWorkflows={() => handleNavigateTo('management')} />
         ) : (
           <>
             <WorkflowBuilder initialTab={workflowBuilderTab} />
-            <Fab
-              color="primary"
-              onClick={handleNavigationClick}
-              sx={{
-                position: 'fixed',
-                bottom: 24,
-                right: 24,
-                zIndex: 1000,
-              }}
-            >
+            <Fab onClick={handleNavigationClick} sx={{
+              position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
+              bgcolor: '#1a2b4a', color: '#fff', width: 48, height: 48,
+              boxShadow: '0 4px 20px rgba(26,43,74,0.25)',
+              '&:hover': { bgcolor: '#2d4a7a', boxShadow: '0 6px 28px rgba(26,43,74,0.35)' },
+            }}>
               <ExpandIcon />
             </Fab>
           </>
         )}
 
-        {/* Navigation Menu */}
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleNavigationClose}
-          anchorOrigin={{
-            vertical: 'top',
-            horizontal: 'center',
-          }}
-          transformOrigin={{
-            vertical: 'bottom',
-            horizontal: 'center',
-          }}
-          PaperProps={{
-            sx: {
-              borderRadius: 3,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              border: '1px solid rgba(0,0,0,0.05)',
-              minWidth: 200,
-              mb: 1,
-            }
-          }}
-        >
-          <MenuItem onClick={() => handleNavigateTo('homepage')}>
-            <ListItemIcon>
-              <HomeIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>
-              Home
-            </ListItemText>
+        <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleNavigationClose}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          PaperProps={{ sx: {
+            borderRadius: 2, boxShadow: '0 12px 40px rgba(26,43,74,0.12)',
+            border: '1px solid rgba(26,43,74,0.06)', minWidth: 220, mb: 1, py: 0.5,
+          }}}>
+          <MenuItem onClick={() => handleNavigateTo('homepage')} sx={{ py: 1.5 }}>
+            <ListItemIcon><HomeIcon fontSize="small" sx={{ color: '#1a2b4a' }} /></ListItemIcon>
+            <ListItemText primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}>Home</ListItemText>
           </MenuItem>
-          
-          <MenuItem onClick={() => handleNavigateTo('builder')}>
-            <ListItemIcon>
-              <BuilderIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>
-              Workflow Builder
-            </ListItemText>
+          <MenuItem onClick={() => handleNavigateTo('builder')} sx={{ py: 1.5 }}>
+            <ListItemIcon><BuilderIcon fontSize="small" sx={{ color: '#c45d3e' }} /></ListItemIcon>
+            <ListItemText primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}>Workflow Builder</ListItemText>
           </MenuItem>
-          
-          <MenuItem onClick={() => handleNavigateTo('management')}>
-            <ListItemIcon>
-              <ViewIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>
-              View Workflows
-            </ListItemText>
+          <MenuItem onClick={() => handleNavigateTo('management')} sx={{ py: 1.5 }}>
+            <ListItemIcon><ViewIcon fontSize="small" sx={{ color: '#5a6578' }} /></ListItemIcon>
+            <ListItemText primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}>View Workflows</ListItemText>
           </MenuItem>
         </Menu>
       </Box>

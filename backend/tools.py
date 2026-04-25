@@ -1,51 +1,46 @@
 """
 Web search and document search tools using OpenAI's APIs.
+Migrated from AutoGen FunctionTool to Microsoft Agent Framework @tool decorator.
 """
 
 import os
-from typing import List
+from typing import List, Annotated
 from openai import OpenAI
+from pydantic import Field
+from agent_framework import tool
 from document_service import get_document_processor
 
 
-def openai_web_search_tool(query: str) -> str:
+@tool
+def openai_web_search_tool(
+    query: Annotated[str, Field(description="The search query to find information on the web")]
+) -> str:
     """
     Use OpenAI's native web search capability via the Responses API.
-    
-    Args:
-        query: The search query
-        
-    Returns:
-        Web search results from OpenAI with citations
+    Returns web search results from OpenAI with citations.
     """
     try:
-        # Add current date context to the query for more relevant results
         from datetime import datetime
         current_date = datetime.now()
-        current_month_year = current_date.strftime("%B %Y")  # e.g., "October 2025"
-        current_full_date = current_date.strftime("%B %d, %Y")  # e.g., "October 12, 2025"
+        current_month_year = current_date.strftime("%B %Y")
+        current_full_date = current_date.strftime("%B %d, %Y")
         
-        # Enhance query with current date context
         enhanced_query = f"{query} {current_month_year} recent news latest updates"
         
         print(f"Performing OpenAI web search for: {enhanced_query}")
         print(f"Current date context: {current_full_date}")
         
-        # Create OpenAI client
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         
-        # Use OpenAI's Responses API with web search tool
         response = client.responses.create(
             model="o4-mini",
             tools=[{"type": "web_search"}],
             input=enhanced_query
         )
         
-        # Extract the response
         if response.output_text:
             formatted_result = f"Web search results for '{query}' (searched: {current_month_year}):\n\n{response.output_text}"
             
-            # Add citation information if available
             if hasattr(response, 'output') and response.output:
                 for item in response.output:
                     if item.type == "message" and hasattr(item, 'content'):
@@ -65,41 +60,34 @@ def openai_web_search_tool(query: str) -> str:
     except Exception as e:
         error_msg = f"Error performing OpenAI web search: {str(e)}"
         print(error_msg)
-        # Fallback to DuckDuckGo if OpenAI web search fails
         return fallback_web_search_tool(query)
 
 
-def fallback_web_search_tool(query: str) -> str:
+@tool
+def fallback_web_search_tool(
+    query: Annotated[str, Field(description="The search query to find information on the web")]
+) -> str:
     """
     Fallback web search using DuckDuckGo search when OpenAI web search is unavailable.
-    
-    Args:
-        query: The search query
-        
-    Returns:
-        Web search results with titles, snippets, and URLs
+    Returns web search results with titles, snippets, and URLs.
     """
     try:
-        # Add current date context to the query
         from datetime import datetime
         current_date = datetime.now()
-        current_month_year = current_date.strftime("%B %Y")  # e.g., "October 2025"
+        current_month_year = current_date.strftime("%B %Y")
         
-        # Enhance query with current date context
         enhanced_query = f"{query} {current_month_year} recent news latest"
         
         print(f"Performing fallback web search for: {enhanced_query}")
         
         from ddgs import DDGS
         
-        # Perform web search using DuckDuckGo
         with DDGS() as ddgs:
             search_results = list(ddgs.text(enhanced_query, max_results=5))
         
         if not search_results:
             return f"No web search results found for: {query}"
         
-        # Format results
         formatted_results = f"Web search results for '{query}' (searched: {current_month_year}):\n\n"
         
         for i, result in enumerate(search_results, 1):
@@ -107,7 +95,6 @@ def fallback_web_search_tool(query: str) -> str:
             snippet = result.get("body", "No description")
             url = result.get("href", "No URL")
             
-            # Truncate very long snippets
             if len(snippet) > 300:
                 snippet = snippet[:300] + "..."
             
@@ -127,53 +114,45 @@ def fallback_web_search_tool(query: str) -> str:
         return error_msg
 
 
-def document_search_tool(query: str = "", max_results: int = 5, filter_documents: List[str] = None) -> str:
+@tool
+def document_search_tool(
+    query: Annotated[str, Field(description="The search query - pass the user's question directly here")],
+    max_results: Annotated[int, Field(description="Maximum number of results to return")] = 5,
+    filter_documents: Annotated[List[str] | None, Field(description="Optional list of document filenames to search in")] = None
+) -> str:
     """
-    Search through uploaded documents using our existing vector search.
-    
-    Args:
-        query: The search query - pass the user's question directly here
-        max_results: Maximum number of results to return (default: 5)
-        filter_documents: Optional list of document filenames to search in (if None, searches all documents)
-        
-    Returns:
-        Detailed search results from uploaded documents with content and relevance scores
+    Search through uploaded documents using vector similarity search.
+    Returns detailed search results from uploaded documents with content and relevance scores.
     """
     try:
         print(f"Performing vector document search for: {query}")
         if filter_documents:
             print(f"Filtering search to documents: {filter_documents}")
         
-        # Get OpenAI API key
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             return "Error: OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable."
         
-        # Get document processor instance
         doc_processor = get_document_processor(api_key)
         
-        # Get document list
         doc_info = doc_processor.list_documents()
         documents = doc_info.get("documents", [])
         
         if not documents:
             return "No documents have been uploaded yet. Please upload documents first using the document upload feature."
         
-        # If filter_documents is specified, check if those documents exist
         if filter_documents:
             available_docs = [doc["filename"] for doc in documents]
             missing_docs = [doc for doc in filter_documents if doc not in available_docs]
             if missing_docs:
                 return f"Some specified documents were not found: {missing_docs}. Available documents: {available_docs}"
         
-        # Perform vector search with optional filtering
         search_results = doc_processor.search_documents(query, max_results, filter_documents)
         
         if not search_results:
             search_scope = f"the specified {len(filter_documents)} documents" if filter_documents else f"{len(documents)} uploaded documents"
             return f"No relevant information found in {search_scope} for query: '{query}'. Try rephrasing your query or check if the information exists in your documents."
         
-        # Format results with relevance scores
         formatted_results = f"Document search results for '{query}':\n\n"
         search_scope_text = f" (filtered to {len(filter_documents)} selected documents)" if filter_documents else ""
         formatted_results += f"Found {len(search_results)} relevant passages{search_scope_text}:\n\n"
@@ -183,7 +162,6 @@ def document_search_tool(query: str = "", max_results: int = 5, filter_documents
             filename = result.get("filename", "Unknown")
             content = result.get("content", "")
             
-            # Truncate very long content (increased from 300 to 2000 for better context)
             if len(content) > 2000:
                 content = content[:2000] + "..."
             
@@ -191,13 +169,12 @@ def document_search_tool(query: str = "", max_results: int = 5, filter_documents
             formatted_results += f"*Source: {filename}*\n"
             formatted_results += f"{content}\n\n"
         
-        # Add summary info
         total_chunks = sum(doc.get("chunk_count", 0) for doc in documents)
         if filter_documents:
             formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {len(filter_documents)} selected documents."
         else:
             formatted_results += f" Search completed: Found {len(search_results)} relevant passages from {total_chunks} total document chunks across {len(documents)} uploaded documents."
-
+        
         print(f"Vector document search completed. Found {len(search_results)} relevant passages.")
         return formatted_results
         
@@ -214,11 +191,14 @@ def get_web_search_tools() -> List:
 
 def create_document_search_tool(filter_documents: List[str] = None):
     """Create a document search tool with specific document filtering"""
-    def filtered_document_search_tool(query: str = "", max_results: int = 5) -> str:
+    @tool
+    def filtered_document_search_tool(
+        query: Annotated[str, Field(description="The search query - pass the user's question directly here")],
+        max_results: Annotated[int, Field(description="Maximum number of results to return")] = 5
+    ) -> str:
         """Search through selected uploaded documents using vector search."""
         return document_search_tool(query, max_results, filter_documents)
     
-    # Update the docstring to reflect the filtering
     if filter_documents:
         filtered_document_search_tool.__doc__ = f"""
         Search through selected uploaded documents ({', '.join(filter_documents)}) using vector search.

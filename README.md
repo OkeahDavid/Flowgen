@@ -1,14 +1,14 @@
 # Flowgen - AI Agent Workflow Builder
 
-A drag-and-drop interface for building and executing AI agent workflows using AutoGen framework with GraphFlow.
+A drag-and-drop interface for building and executing AI agent workflows using Microsoft Agent Framework.
 
 ## Features
 
 - **Intuitive Drag & Drop Interface**: Build workflows by dragging agents onto a canvas
-- **Three Agent Types**: Web Search, Document Search, and Summarizer agents
+- **Four Agent Types**: Web Search, Document Search, Summarizer, and Creative Writer agents
 - **Visual Workflow Design**: Connect agents with visual connections
 - **Real-time Execution**: Execute workflows and see results in real-time
-- **AutoGen Integration**: Powered by Microsoft's AutoGen framework with [GraphFlow](https://microsoft.github.io/autogen/stable//user-guide/agentchat-user-guide/graph-flow.html)
+- **Agent Framework Integration**: Powered by Microsoft's Agent Framework for typed workflow orchestration
 - **PostgreSQL Database**: Persistent storage for workflows, executions, and documents
 - **Material UI Design**: Clean, modern interface built with React and Material UI
 <img width="1914" height="900" alt="image" src="https://github.com/user-attachments/assets/78e0ee4f-af54-413f-b3ee-d9dec6a6bef6" />
@@ -18,7 +18,7 @@ A drag-and-drop interface for building and executing AI agent workflows using Au
 ### Backend
 - **Python** with **uv** for dependency management
 - **FastAPI** for REST API
-- **AutoGen AgentChat 0.7.5** with GraphFlow
+- **Microsoft Agent Framework 1.2+** for workflow orchestration
 - **OpenAI API** for LLM integration
 
 ### Frontend
@@ -158,6 +158,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- **Microsoft AutoGen** for the agent framework
+- **Microsoft Agent Framework** for the agent framework
 - **Material UI** for the component library
 - **@dnd-kit** for drag-and-drop functionality
