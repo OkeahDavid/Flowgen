@@ -1,469 +1,432 @@
-import { useEffect, useState } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  CircularProgress, 
-  Accordion, 
-  AccordionSummary, 
-  AccordionDetails,
+import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  Box,
+  Typography,
+  Paper,
+  CircularProgress,
   Chip,
   Stack,
   Alert,
-  LinearProgress,
-  IconButton,
-  Divider
+  Fade,
+  Collapse,
 } from '@mui/material';
 import {
-  ExpandMore as ExpandMoreIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
-  Schedule as ScheduleIcon,
-  Person as PersonIcon,
   SmartToy as BotIcon,
-  Refresh as RefreshIcon,
-  Visibility as ViewIcon,
-  Clear as ClearIcon
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
-import type { WorkflowResponse, WorkflowMessage } from '../typesTemp';
-import { getWorkflowStatus } from '../services/apiTemp';
+import ReactMarkdown from 'react-markdown';
+import type { StreamEvent } from '../services/apiTemp';
 
-interface WorkflowResultsProps {
-  response: WorkflowResponse | null;
-  onWorkflowUpdate?: (updatedResponse: WorkflowResponse) => void;
-  onClearResults?: () => void;
+// ── Types ───────────────────────────────────────────────────────────────────
+
+export interface WorkflowStep {
+  id: string;
+  type: 'agent_started' | 'agent_completed' | 'agent_data' | 'output' | 'system' | 'error';
+  agentId?: string;
+  content?: string;
+  timestamp: Date;
 }
 
-const WorkflowResults = ({ response, onWorkflowUpdate, onClearResults }: WorkflowResultsProps) => {
-  const [currentResponse, setCurrentResponse] = useState<WorkflowResponse | null>(response);
-  const [polling, setPolling] = useState(false);
-  const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
+interface WorkflowResultsProps {
+  steps: WorkflowStep[];
+  streamEvents: StreamEvent[];
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'error';
+  error?: string;
+  workflowId?: string;
+}
 
-  // Auto-polling for running workflows
+// ── Component ───────────────────────────────────────────────────────────────
+
+const WorkflowResults = ({ steps, status, error, workflowId }: WorkflowResultsProps) => {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    let intervalId: number | null = null;
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [steps.length]);
 
-    if (response?.status === 'running' && response.workflow_id) {
-      setPolling(true);
-      intervalId = setInterval(async () => {
-        try {
-          const updatedResponse = await getWorkflowStatus(response.workflow_id);
-          setCurrentResponse(updatedResponse);
-          setLastPollTime(new Date());
-          
-          if (onWorkflowUpdate) {
-            onWorkflowUpdate(updatedResponse);
-          }
+  const isRunning = status === 'running';
+  const isDone = status === 'completed';
+  const isFailed = status === 'failed' || status === 'error';
 
-          // Stop polling when workflow completes
-          if (updatedResponse.status !== 'running') {
-            setPolling(false);
-          }
-        } catch {
-          setPolling(false);
-        }
-      }, 3000); // Poll every 3 seconds
-    } else {
-      setPolling(false);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [response?.workflow_id, response?.status, onWorkflowUpdate]);
-
-  // Update local state when prop changes
-  useEffect(() => {
-    setCurrentResponse(response);
-  }, [response]);
-
-  const handleManualRefresh = async () => {
-    if (currentResponse?.workflow_id) {
-      try {
-        const updatedResponse = await getWorkflowStatus(currentResponse.workflow_id);
-        setCurrentResponse(updatedResponse);
-        setLastPollTime(new Date());
-        
-        if (onWorkflowUpdate) {
-          onWorkflowUpdate(updatedResponse);
-        }
-      } catch {
-        // Error refreshing status
-      }
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'running':
-        return <CircularProgress size={20} color="info" />;
-      case 'completed':
-        return <CheckIcon color="success" />;
-      case 'error':
-        return <ErrorIcon color="error" />;
-      default:
-        return <ScheduleIcon color="disabled" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-        return 'info';
-      case 'completed':
-        return 'success';
-      case 'error':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const getMessageIcon = (source: string) => {
-    if (source === 'user') {
-      return <PersonIcon fontSize="small" color="primary" />;
-    } else if (source === 'unknown' || source === 'system') {
-      return <BotIcon fontSize="small" color="disabled" />;
-    } else {
-      return <BotIcon fontSize="small" color="secondary" />;
-    }
-  };
+  const agentSections = buildAgentSections(steps);
 
   return (
-    <Box sx={{ height: '100%', p: 3, bgcolor: '#faf8f5', overflow: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box>
-          <Typography variant="subtitle2" sx={{ color: '#c45d3e', fontSize: '0.65rem', letterSpacing: '0.1em', mb: 0.5 }}>
-            OUTPUT
-          </Typography>
-          <Typography variant="h6" sx={{ fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600, fontSize: '1.1rem', color: '#1a2b4a' }}>
-            Workflow Results
-          </Typography>
-        </Box>
-        {currentResponse?.workflow_id && (
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton 
-              onClick={handleManualRefresh} 
-              size="small" 
-              disabled={polling}
-              title="Refresh status"
-            >
-              <RefreshIcon />
-            </IconButton>
-            {onClearResults && (
-              <IconButton 
-                onClick={() => {
-                  onClearResults();
-                  setCurrentResponse(null);
-                }} 
-                size="small"
-                title="Clear results"
-              >
-                <ClearIcon />
-              </IconButton>
-            )}
-          </Box>
-        )}
-      </Box>
-
-      {currentResponse ? (
-        <Box>
-          {/* Workflow Status Header */}
-          <Paper 
-            sx={{ 
-              p: 3, 
-              mb: 3, 
-              borderRadius: 3,
-              background: currentResponse.status === 'completed' 
-                ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
-                : currentResponse.status === 'error'
-                ? 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)'
-                : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-              border: '1px solid',
-              borderColor: currentResponse.status === 'completed' 
-                ? 'success.light'
-                : currentResponse.status === 'error'
-                ? 'error.light'
-                : 'info.light',
-              boxShadow: 2
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#faf8f5' }}>
+      {/* Header */}
+      <Box sx={{ px: 2.5, pt: 2, pb: 1.5 }}>
+        <Typography
+          variant="subtitle2"
+          sx={{ color: '#c45d3e', fontSize: '0.6rem', letterSpacing: '0.12em', mb: 0.3 }}
+        >
+          OUTPUT
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontWeight: 600,
+              fontSize: '1rem',
+              color: '#1a2b4a',
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                width: 40,
-                height: 40,
-                borderRadius: 2,
-                bgcolor: currentResponse.status === 'completed' 
-                  ? 'success.main'
-                  : currentResponse.status === 'error'
-                  ? 'error.main'
-                  : 'info.main',
-                color: 'white'
-              }}>
-                {getStatusIcon(currentResponse.status)}
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  {currentResponse.status.charAt(0).toUpperCase() + currentResponse.status.slice(1)}
-                </Typography>
-                <Chip
-                  label={currentResponse.status.toUpperCase()}
-                  color={getStatusColor(currentResponse.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
-                  size="small"
-                  sx={{ fontWeight: 600, fontSize: '0.7rem' }}
-                />
-              </Box>
-            </Box>
-            
-            <Typography 
-              variant="caption" 
-              color="text.secondary" 
-              sx={{ 
-                fontFamily: 'monospace',
-                display: 'block',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                bgcolor: 'white',
-                p: 1,
-                borderRadius: 1,
-                border: '1px solid',
-                borderColor: 'divider'
-              }}
-              title={currentResponse.workflow_id}
-            >
-              ID: {currentResponse.workflow_id}
+            Workflow Results
+          </Typography>
+          {isRunning && <CircularProgress size={14} sx={{ color: '#c45d3e' }} />}
+          {isDone && <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />}
+          {isFailed && <ErrorIcon sx={{ fontSize: 16, color: 'error.main' }} />}
+        </Box>
+      </Box>
+
+      {/* Steps area */}
+      <Box sx={{ flex: 1, overflow: 'auto', px: 2.5, pb: 2 }}>
+        {/* Empty state */}
+        {status === 'idle' && steps.length === 0 && (
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <BotIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1.5 }} />
+            <Typography variant="body2" color="text.secondary">
+              Run a workflow to see step-by-step results here
             </Typography>
-            
-            {polling && (
-              <Box sx={{ mt: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <CircularProgress size={16} />
-                  <Typography variant="body2" color="info.main" sx={{ fontWeight: 500 }}>
-                    Auto-refreshing every 3 seconds
-                  </Typography>
-                </Box>
-                <LinearProgress variant="indeterminate" sx={{ borderRadius: 1, height: 6 }} />
-              </Box>
-            )}
+          </Box>
+        )}
 
-            {lastPollTime && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, fontStyle: 'italic' }}>
-                Last updated: {lastPollTime.toLocaleTimeString()}
-              </Typography>
-            )}
-          </Paper>
-
-          {/* Error Display */}
-          {currentResponse.status === 'error' && currentResponse.error && (
-            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Workflow Error
-              </Typography>
-              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                {currentResponse.error}
-              </Typography>
-            </Alert>
-          )}
-
-          {/* Progress Information */}
-          {currentResponse.result && (
-            <Paper 
-              sx={{ 
-                p: 3, 
-                mb: 3, 
-                borderRadius: 3,
-                border: '1px solid',
-                borderColor: 'divider',
-                boxShadow: 1
+        {/* Workflow ID */}
+        {workflowId && (
+          <Fade in>
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                fontFamily: 'monospace',
+                color: 'text.disabled',
+                fontSize: '0.65rem',
+                mb: 1.5,
               }}
             >
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: 'text.primary' }}>
-                Progress Overview
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ gap: 1 }}>
-                <Chip 
-                  icon={<ViewIcon />} 
-                  label={`${currentResponse.result.messages?.length || 0} Messages`} 
-                  variant="filled" 
-                  color="primary"
-                  sx={{ fontWeight: 600 }}
+              {workflowId}
+            </Typography>
+          </Fade>
+        )}
+
+        {/* Agent sections — one card per agent, collapsible */}
+        <Stack spacing={1.5}>
+          {agentSections.map((section, idx) => (
+            <Fade in key={section.agentId + idx} timeout={400}>
+              <div>
+                <AgentCard
+                  section={section}
+                  isLast={idx === agentSections.length - 1}
+                  workflowDone={isDone}
                 />
-                {currentResponse.result.total_events && (
-                  <Chip 
-                    label={`${currentResponse.result.total_events} Events`} 
-                    variant="filled" 
-                    color="secondary"
-                    sx={{ fontWeight: 600 }}
-                  />
-                )}
-                {currentResponse.result.stop_reason && currentResponse.status === 'completed' && (
-                  <Chip 
-                    label={currentResponse.result.stop_reason} 
-                    variant="filled" 
-                    color="success"
-                    sx={{ fontWeight: 600 }}
-                  />
-                )}
-              </Stack>
-            </Paper>
-          )}
+              </div>
+            </Fade>
+          ))}
+        </Stack>
 
-          {/* Messages Display */}
-          {currentResponse.result?.messages && currentResponse.result.messages.length > 0 && (
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
-                Conversation Flow ({currentResponse.result.messages.length} messages)
-              </Typography>
-              
-              <Stack spacing={2}>
-                {currentResponse.result.messages.map((message: WorkflowMessage, index: number) => {
-                  // Filter out the raw result message that contains the full conversation dump
-                  if (message.source === 'unknown' && typeof message.content === 'string' && message.content.includes('messages=[')) {
-                    return null;
-                  }
+        {/* Error banner */}
+        {isFailed && error && (
+          <Alert severity="error" sx={{ mt: 2, borderRadius: 2, fontSize: '0.8rem' }}>
+            {error}
+          </Alert>
+        )}
 
-                  return (
-                    <Accordion 
-                      key={index} 
-                      sx={{ 
-                        borderRadius: 2, 
-                        '&:before': { display: 'none' },
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        '&:hover': {
-                          borderColor: 'primary.main',
-                          boxShadow: 1
-                        }
-                      }}
-                    >
-                      <AccordionSummary 
-                        expandIcon={<ExpandMoreIcon />}
-                        sx={{ 
-                          borderRadius: 2,
-                          '& .MuiAccordionSummary-content': { 
-                            flexDirection: 'column',
-                            alignItems: 'flex-start',
-                            my: 1.5
-                          }
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%', mb: 1 }}>
-                          {getMessageIcon(message.source)}
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              fontWeight: 600,
-                              wordBreak: 'break-word',
-                              color: message.source === 'user' ? 'primary.main' : 'text.primary'
-                            }}
-                            title={message.source === 'user' ? 'User Input' : 
-                                   message.source === 'system' ? 'System' :
-                                   `Agent: ${message.source}`}
-                          >
-                            {message.source === 'user' ? 'User Input' : 
-                             message.source === 'system' ? 'System' :
-                             message.source.length > 30 ? `Agent: ${message.source.substring(0, 30)}...` : `Agent: ${message.source}`}
-                          </Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ width: '100%', gap: 0.5 }}>
-                          <Chip
-                            label={message.type || 'TextMessage'}
-                            size="small"
-                            variant="filled"
-                            color="primary"
-                            sx={{ 
-                              fontWeight: 500,
-                              fontSize: '0.7rem',
-                              height: 24
-                            }}
-                          />
-                          {message.models_usage && (
-                            <Chip
-                              label={`${message.models_usage.prompt_tokens || 0}→${message.models_usage.completion_tokens || 0}`}
-                              size="small"
-                              variant="outlined"
-                              color="secondary"
-                              sx={{ 
-                                fontWeight: 500,
-                                fontSize: '0.7rem',
-                                height: 24
-                              }}
-                            />
-                          )}
-                        </Stack>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 2, pb: 2 }}>
-                        <Divider sx={{ mb: 2 }} />
-                        <Box 
-                          sx={{ 
-                            p: 2, 
-                            bgcolor: 'grey.50', 
-                            borderRadius: 1,
-                            border: '1px solid',
-                            borderColor: 'grey.200'
-                          }}
-                        >
-                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, wordBreak: 'break-word', fontFamily: 'system-ui' }}>
-                            {typeof message.content === 'string' 
-                              ? message.content 
-                              : JSON.stringify(message.content, null, 2)
-                            }
-                          </Typography>
-                        </Box>
-                        {message.models_usage && (
-                          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1, border: '1px solid', borderColor: 'grey.300' }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
-                              Token Usage
-                            </Typography>
-                            <Stack direction="row" spacing={2} flexWrap="wrap">
-                              <Typography variant="caption" color="text.secondary">
-                                <strong>Prompt:</strong> {message.models_usage.prompt_tokens || 0}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                <strong>Completion:</strong> {message.models_usage.completion_tokens || 0}
-                              </Typography>
-                              <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
-                                <strong>Total:</strong> {(message.models_usage.prompt_tokens || 0) + (message.models_usage.completion_tokens || 0)}
-                              </Typography>
-                            </Stack>
-                          </Box>
-                        )}
-                      </AccordionDetails>
-                    </Accordion>
-                  );
-                })}
-              </Stack>
-            </Box>
-          )}
+        {/* Completion banner */}
+        {isDone && (
+          <Alert
+            severity="success"
+            sx={{ mt: 2, borderRadius: 2, fontSize: '0.8rem' }}
+            icon={<CheckIcon fontSize="small" />}
+          >
+            Workflow completed successfully
+          </Alert>
+        )}
 
-          {/* Running Status Message */}
-          {currentResponse.status === 'running' && (
-            <Alert severity="info" sx={{ mt: 3, borderRadius: 2 }}>
-              <Typography variant="body2">
-                🔄 Your AI agents are working together to complete this task. Results will appear here as they become available.
-              </Typography>
-            </Alert>
-          )}
-        </Box>
-      ) : (
-        <Box sx={{ textAlign: 'center', py: 6 }}>
-          <BotIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-          <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontWeight: 500 }}>
-            No Active Workflow
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Execute a workflow to see real-time results and agent conversations here
-          </Typography>
-        </Box>
-      )}
+        <div ref={bottomRef} />
+      </Box>
     </Box>
   );
 };
+
+// ── Collapsible agent card ──────────────────────────────────────────────────
+
+function AgentCard({
+  section,
+  isLast,
+  workflowDone,
+}: {
+  section: AgentSection;
+  isLast: boolean;
+  workflowDone: boolean;
+}) {
+  // Last card starts expanded; earlier cards start collapsed once they have content and are done
+  const [expanded, setExpanded] = useState(true);
+  const wasActive = useRef(true);
+
+  // Auto-collapse previous cards when they finish (content arrived + no longer active)
+  useEffect(() => {
+    if (wasActive.current && !section.isActive && section.content && !isLast) {
+      // Agent just finished — collapse after a short delay so user sees the content briefly
+      const t = setTimeout(() => setExpanded(false), 1200);
+      return () => clearTimeout(t);
+    }
+    wasActive.current = section.isActive;
+  }, [section.isActive, section.content, isLast]);
+
+  const toggle = useCallback(() => setExpanded((p) => !p), []);
+
+  const hasContent = !!section.content;
+  const isFinal = isLast && workflowDone && hasContent;
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        borderRadius: 2.5,
+        border: '1px solid',
+        borderColor: section.isError
+          ? 'rgba(244, 67, 54, 0.3)'
+          : isFinal
+          ? 'rgba(76, 175, 80, 0.3)'
+          : 'rgba(26, 43, 74, 0.08)',
+        bgcolor: section.isError
+          ? 'rgba(244, 67, 54, 0.04)'
+          : isFinal
+          ? 'rgba(76, 175, 80, 0.04)'
+          : 'white',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Clickable header */}
+      <Box
+        onClick={hasContent ? toggle : undefined}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          px: 2,
+          py: 1,
+          cursor: hasContent ? 'pointer' : 'default',
+          bgcolor: section.isError
+            ? 'rgba(244, 67, 54, 0.08)'
+            : isFinal
+            ? 'rgba(76, 175, 80, 0.08)'
+            : 'rgba(26, 43, 74, 0.03)',
+          borderBottom: expanded && hasContent ? '1px solid rgba(26, 43, 74, 0.06)' : 'none',
+          '&:hover': hasContent
+            ? { bgcolor: isFinal ? 'rgba(76,175,80,0.12)' : 'rgba(26,43,74,0.05)' }
+            : {},
+        }}
+      >
+        {/* Status icon */}
+        {section.isError ? (
+          <ErrorIcon sx={{ fontSize: 14, color: 'error.main' }} />
+        ) : section.isActive ? (
+          <CircularProgress size={12} sx={{ color: '#c45d3e' }} />
+        ) : hasContent ? (
+          <CheckIcon sx={{ fontSize: 14, color: 'success.main' }} />
+        ) : (
+          <BotIcon sx={{ fontSize: 14, color: '#5a6578' }} />
+        )}
+
+        {/* Agent name */}
+        <Typography
+          variant="caption"
+          sx={{ fontWeight: 600, fontSize: '0.7rem', color: section.isError ? 'error.main' : '#1a2b4a', flex: 1 }}
+        >
+          {formatAgentName(section.agentId)}
+        </Typography>
+
+        {/* Status chip */}
+        {section.isActive && (
+          <Chip
+            label="processing"
+            size="small"
+            sx={{ height: 18, fontSize: '0.6rem', fontWeight: 600, bgcolor: 'rgba(196,93,62,0.1)', color: '#c45d3e' }}
+          />
+        )}
+        {!section.isActive && hasContent && !isFinal && (
+          <Chip
+            label="done"
+            size="small"
+            sx={{ height: 18, fontSize: '0.6rem', fontWeight: 600, bgcolor: 'rgba(76,175,80,0.1)', color: 'success.main' }}
+          />
+        )}
+        {isFinal && (
+          <Chip
+            label="final output"
+            size="small"
+            sx={{ height: 18, fontSize: '0.6rem', fontWeight: 600, bgcolor: 'rgba(76,175,80,0.15)', color: 'success.dark' }}
+          />
+        )}
+
+        {/* Expand chevron */}
+        {hasContent && (
+          <ExpandMoreIcon
+            sx={{
+              fontSize: 16,
+              color: 'text.disabled',
+              transition: 'transform 0.2s',
+              transform: expanded ? 'rotate(180deg)' : 'none',
+            }}
+          />
+        )}
+      </Box>
+
+      {/* Content — collapsible, with real-time streaming */}
+      <Collapse in={expanded && hasContent}>
+        <Box sx={{ px: 2, py: 1.5 }}>
+          <StreamingContent content={section.content} sectionKey={section.agentId} isStreaming={section.isActive} />
+        </Box>
+      </Collapse>
+    </Paper>
+  );
+}
+
+// ── Streaming content — renders progressively as tokens arrive ──────────────
+
+function StreamingContent({ content, isStreaming }: { content: string; sectionKey?: string; isStreaming?: boolean }) {
+  return (
+    <Box sx={mdStyles}>
+      <ReactMarkdown>{content}</ReactMarkdown>
+      {isStreaming && (
+        <Box
+          component="span"
+          sx={{
+            display: 'inline-block',
+            width: 2,
+            height: '1em',
+            bgcolor: '#c45d3e',
+            ml: 0.3,
+            verticalAlign: 'text-bottom',
+            animation: 'blink 1s step-end infinite',
+            '@keyframes blink': { '50%': { opacity: 0 } },
+          }}
+        />
+      )}
+    </Box>
+  );
+}
+
+const mdStyles = {
+  lineHeight: 1.7,
+  fontSize: '0.82rem',
+  color: '#2d3748',
+  fontFamily: '"DM Sans", system-ui, -apple-system, sans-serif',
+  wordBreak: 'break-word',
+  '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
+  '& strong': { fontWeight: 700, color: '#1a2b4a' },
+  '& h1, & h2, & h3, & h4': {
+    fontFamily: '"Playfair Display", Georgia, serif',
+    color: '#1a2b4a',
+    mt: 1.5,
+    mb: 0.75,
+    fontWeight: 600,
+  },
+  '& h3': { fontSize: '0.95rem' },
+  '& h4': { fontSize: '0.88rem' },
+  '& ul, & ol': { pl: 2.5, my: 0.5 },
+  '& li': { mb: 0.3, fontSize: '0.82rem' },
+  '& a': { color: '#c45d3e', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
+  '& code': {
+    bgcolor: 'rgba(26, 43, 74, 0.06)',
+    px: 0.6,
+    py: 0.15,
+    borderRadius: 0.5,
+    fontSize: '0.78rem',
+    fontFamily: 'monospace',
+  },
+  '& blockquote': {
+    borderLeft: '3px solid #c45d3e',
+    pl: 1.5,
+    ml: 0,
+    color: '#5a6578',
+    fontStyle: 'italic',
+  },
+  '& hr': { border: 'none', borderTop: '1px solid rgba(26,43,74,0.1)', my: 1.5 },
+} as const;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+interface AgentSection {
+  agentId: string;
+  content: string;
+  isActive: boolean;
+  isComplete: boolean;
+  isError: boolean;
+}
+
+function buildAgentSections(steps: WorkflowStep[]): AgentSection[] {
+  const sections: AgentSection[] = [];
+  const sectionMap: Record<string, number> = {};
+
+  for (const step of steps) {
+    const aid = step.agentId || 'system';
+
+    if (step.type === 'agent_started') {
+      const idx = sections.length;
+      sections.push({
+        agentId: aid,
+        content: '',
+        isActive: true,
+        isComplete: false,
+        isError: false,
+      });
+      sectionMap[aid] = idx;
+    } else if (step.type === 'agent_data' || step.type === 'output') {
+      // Merge data/output into the agent's existing section
+      const idx = sectionMap[aid];
+      if (idx !== undefined && sections[idx]) {
+        sections[idx].content = step.content || '';
+        // If output arrived, agent is done
+        if (step.type === 'output') {
+          sections[idx].isActive = false;
+          sections[idx].isComplete = true;
+        }
+      } else {
+        // No section yet (shouldn't happen, but handle gracefully)
+        const newIdx = sections.length;
+        sections.push({
+          agentId: aid,
+          content: step.content || '',
+          isActive: false,
+          isComplete: true,
+          isError: false,
+        });
+        sectionMap[aid] = newIdx;
+      }
+    } else if (step.type === 'agent_completed') {
+      const idx = sectionMap[aid];
+      if (idx !== undefined && sections[idx]) {
+        sections[idx].isActive = false;
+        sections[idx].isComplete = true;
+      }
+    } else if (step.type === 'error') {
+      const idx = sectionMap[aid];
+      if (idx !== undefined && sections[idx]) {
+        sections[idx].content = step.content || '';
+        sections[idx].isActive = false;
+        sections[idx].isError = true;
+      } else {
+        sections.push({
+          agentId: aid,
+          content: step.content || '',
+          isActive: false,
+          isComplete: false,
+          isError: true,
+        });
+      }
+    }
+  }
+
+  return sections;
+}
+
+function formatAgentName(id: string): string {
+  const parts = id.split('_');
+  const cleaned = parts.filter((p) => !/^\d{6,}$/.test(p));
+  return cleaned.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
 
 export default WorkflowResults;

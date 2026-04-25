@@ -23,9 +23,11 @@ import {
 import AgentPalette from './AgentPaletteTemp';
 import WorkflowCanvas from './WorkflowCanvasTemp';
 import WorkflowResults from './WorkflowResultsTemp';
+import type { WorkflowStep } from './WorkflowResultsTemp';
 import WorkflowManagement from './WorkflowManagementTemp';
-import type { AgentConfig, Connection, WorkflowResponse, WorkflowRequest } from '../typesTemp';
-import { createWorkflow, getWorkflowStatus } from '../services/apiTemp';
+import type { AgentConfig, Connection, WorkflowRequest } from '../typesTemp';
+import { streamWorkflow } from '../services/apiTemp';
+import type { StreamEvent } from '../services/apiTemp';
 
 interface WorkflowBuilderProps {
   initialTab?: number;
@@ -34,12 +36,16 @@ interface WorkflowBuilderProps {
 
 const WorkflowBuilder = ({ initialTab = 0, onHome }: WorkflowBuilderProps) => {
   const [currentTab, setCurrentTab] = useState<number>(initialTab);
-  const [workflowStatus, setWorkflowStatus] = useState<string>('idle');
+  const [workflowStatus, setWorkflowStatus] = useState<'idle' | 'running' | 'completed' | 'failed' | 'error'>('idle');
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [workflowResponse, setWorkflowResponse] = useState<WorkflowResponse | null>(null);
   const [task, setTask] = useState('');
   const [loading, setLoading] = useState(false);
+  const [steps, setSteps] = useState<WorkflowStep[]>([]);
+  const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([]);
+  const [workflowId, setWorkflowId] = useState<string | undefined>();
+  const [workflowError, setWorkflowError] = useState<string | undefined>();
+  const abortRef = useRef<AbortController | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -106,45 +112,9 @@ const WorkflowBuilder = ({ initialTab = 0, onHome }: WorkflowBuilderProps) => {
     ));
   }, []);
 
-  const pollWorkflowStatus = useCallback(async (workflowId: string) => {
-    const maxAttempts = 60; // Poll for 5 minutes max (every 5 seconds)
-    let attempts = 0;
-
-    const poll = async () => {
-      try {
-        const response = await getWorkflowStatus(workflowId);
-        setWorkflowResponse(response);
-        
-        if (response.status === 'completed' || response.status === 'failed' || response.status === 'error') {
-          setWorkflowStatus(response.status === 'error' ? 'failed' : response.status);
-          
-          // Workflow status stored in database only
-          
-          return;
-        }
-        
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 5000); // Poll every 5 seconds
-        } else {
-          setWorkflowStatus('timeout');
-          setSnackbar({
-            open: true,
-            message: 'Workflow polling timeout',
-            severity: 'warning',
-          });
-        }
-      } catch {
-        setWorkflowStatus('error');
-        setSnackbar({
-          open: true,
-          message: 'Error checking workflow status',
-          severity: 'error',
-        });
-      }
-    };
-
-    poll();
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
   }, []);
 
   const handleExecuteWorkflow = async () => {
@@ -167,39 +137,131 @@ const WorkflowBuilder = ({ initialTab = 0, onHome }: WorkflowBuilderProps) => {
     executeWorkflowWithTask();
   };
 
-  const executeWorkflowWithTask = async () => {
+  const executeWorkflowWithTask = () => {
+    // Reset state
     setLoading(true);
     setWorkflowStatus('running');
-    try {
-      const request: WorkflowRequest = {
-        agents,
-        connections,
-        task,
-      };
+    setSteps([]);
+    setStreamEvents([]);
+    setWorkflowId(undefined);
+    setWorkflowError(undefined);
+    abortRef.current?.abort();
 
-      const response = await createWorkflow(request);
-      setWorkflowResponse(response);
+    const request: WorkflowRequest = { agents, connections, task };
 
-      // Poll for results if the workflow is running
-      if (response.status === 'running') {
-        pollWorkflowStatus(response.workflow_id);
+    const onEvent = (event: StreamEvent) => {
+      setStreamEvents(prev => [...prev, event]);
+
+      if (event.type === 'workflow_started' && event.workflow_id) {
+        setWorkflowId(event.workflow_id);
+      } else if (event.type === 'executor_invoked') {
+        setSteps(prev => [...prev, {
+          id: `${event.executor_id}_start_${Date.now()}`,
+          type: 'agent_started',
+          agentId: event.executor_id,
+          timestamp: new Date(),
+        }]);
+      } else if (event.type === 'token') {
+        // Live token-by-token streaming — update the agent's content progressively
+        const aid = event.source || event.executor_id;
+        setSteps(prev => {
+          const existing = prev.find(s => s.agentId === aid && s.type === 'agent_data');
+          if (existing) {
+            return prev.map(s =>
+              s.id === existing.id ? { ...s, content: event.content } : s
+            );
+          }
+          return [...prev, {
+            id: `${aid}_data`,
+            type: 'agent_data' as const,
+            agentId: aid,
+            content: event.content,
+            timestamp: new Date(),
+          }];
+        });
+      } else if (event.type === 'agent_done') {
+        // Agent finished streaming — finalize the content
+        const aid = event.source || event.executor_id;
+        setSteps(prev => {
+          const existing = prev.find(s => s.agentId === aid && s.type === 'agent_data');
+          if (existing) {
+            return prev.map(s =>
+              s.id === existing.id ? { ...s, content: event.content, type: 'output' as const } : s
+            );
+          }
+          return [...prev, {
+            id: `${aid}_output_${Date.now()}`,
+            type: 'output' as const,
+            agentId: aid,
+            content: event.content,
+            timestamp: new Date(),
+          }];
+        });
+      } else if (event.type === 'data') {
+        setSteps(prev => [...prev, {
+          id: `${event.executor_id}_data_${Date.now()}`,
+          type: 'agent_data',
+          agentId: event.executor_id,
+          content: event.content,
+          timestamp: new Date(),
+        }]);
+      } else if (event.type === 'executor_completed') {
+        setSteps(prev => [...prev, {
+          id: `${event.executor_id}_done_${Date.now()}`,
+          type: 'agent_completed',
+          agentId: event.executor_id,
+          timestamp: new Date(),
+        }]);
+      } else if (event.type === 'output') {
+        const aid = event.source || event.executor_id;
+        setSteps(prev => {
+          // Merge into existing data step if present
+          const existing = prev.find(s => s.agentId === aid && (s.type === 'agent_data' || s.type === 'output'));
+          if (existing) {
+            return prev.map(s =>
+              s.id === existing.id ? { ...s, content: event.content, type: 'output' as const } : s
+            );
+          }
+          return [...prev, {
+            id: `${aid}_output_${Date.now()}`,
+            type: 'output' as const,
+            agentId: aid,
+            content: event.content,
+            timestamp: new Date(),
+          }];
+        });
+      } else if (event.type === 'workflow_completed') {
+        setWorkflowStatus('completed');
+        setLoading(false);
+      } else if (event.type === 'workflow_error') {
+        setWorkflowStatus('failed');
+        setWorkflowError(event.error);
+        setLoading(false);
+      } else if (event.type === 'failed' || event.type === 'executor_failed') {
+        setSteps(prev => [...prev, {
+          id: `error_${Date.now()}`,
+          type: 'error',
+          agentId: event.executor_id,
+          content: event.error,
+          timestamp: new Date(),
+        }]);
       }
+    };
 
-      setSnackbar({
-        open: true,
-        message: 'Workflow started successfully!',
-        severity: 'success',
-      });
-    } catch (error) {
-      setWorkflowStatus('idle');
-      setSnackbar({
-        open: true,
-        message: `Failed to start workflow: ${error}`,
-        severity: 'error',
-      });
-    } finally {
+    const onError = (err: Error) => {
+      setWorkflowStatus('failed');
+      setWorkflowError(err.message);
       setLoading(false);
-    }
+      setSnackbar({ open: true, message: `Workflow failed: ${err.message}`, severity: 'error' });
+    };
+
+    const onDone = () => {
+      // Stream ended – if status wasn't set by a completion event, mark done
+      setLoading(false);
+      setWorkflowStatus(prev => prev === 'running' ? 'completed' : prev);
+    };
+
+    abortRef.current = streamWorkflow(request, onEvent, onError, onDone);
   };
 
   const handleTaskSubmit = () => {
@@ -207,10 +269,15 @@ const WorkflowBuilder = ({ initialTab = 0, onHome }: WorkflowBuilderProps) => {
   };
 
   const handleClearWorkflow = () => {
+    abortRef.current?.abort();
     setWorkflowStatus('idle');
     setAgents([]);
     setConnections([]);
-    setWorkflowResponse(null);
+    setSteps([]);
+    setStreamEvents([]);
+    setWorkflowId(undefined);
+    setWorkflowError(undefined);
+    setLoading(false);
   };
 
   // Resizable results panel
@@ -443,10 +510,12 @@ const WorkflowBuilder = ({ initialTab = 0, onHome }: WorkflowBuilderProps) => {
 
                 {/* Results below */}
                 <Box sx={{ flex: 1, overflow: 'auto' }}>
-                  <WorkflowResults 
-                    response={workflowResponse} 
-                    onWorkflowUpdate={setWorkflowResponse}
-                    onClearResults={() => setWorkflowResponse(null)}
+                  <WorkflowResults
+                    steps={steps}
+                    streamEvents={streamEvents}
+                    status={workflowStatus}
+                    error={workflowError}
+                    workflowId={workflowId}
                   />
                 </Box>
               </Box>

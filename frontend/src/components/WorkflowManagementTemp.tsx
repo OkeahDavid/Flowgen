@@ -11,30 +11,28 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Stack,
   Divider,
   Card,
   CardContent,
   CardActions,
   CircularProgress,
-  Tooltip
+  Tooltip,
+  Collapse,
 } from '@mui/material';
 import {
   Visibility as ViewIcon,
   Delete as DeleteIcon,
   Refresh as RefreshIcon,
-  ExpandMore as ExpandMoreIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   Schedule as ScheduleIcon,
   SmartToy as BotIcon,
-  Person as PersonIcon,
   Search as SearchIcon,
-  Download as ExportIcon
+  Download as ExportIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
+import ReactMarkdown from 'react-markdown';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -45,6 +43,7 @@ interface WorkflowSummary {
   created_at: string;
   completed_at?: string;
   agent_count: number;
+  agent_types: string[];
 }
 
 interface DetailedWorkflowResponse {
@@ -89,14 +88,18 @@ const WorkflowManagement: React.FC = () => {
       const dbWorkflows = await response.json();
       
       // Convert database workflows to WorkflowSummary format
-      const workflowList = dbWorkflows.map((wf: { id: string; status?: string; description?: string; name?: string; created_at: string; updated_at?: string; workflow_data?: { agents?: unknown[] } }) => ({
-        id: wf.id,
-        status: wf.status || 'unknown',
-        task: wf.description || wf.name || 'No description',
-        created_at: wf.created_at,
-        completed_at: wf.updated_at,
-        agent_count: wf.workflow_data?.agents?.length || 0
-      }));
+      const workflowList = dbWorkflows.map((wf: { id: string; status?: string; description?: string; name?: string; created_at: string; updated_at?: string; workflow_data?: { agents?: Array<{ type?: string }>; task?: string } }) => {
+        const agents = wf.workflow_data?.agents || [];
+        return {
+          id: wf.id,
+          status: wf.status || 'unknown',
+          task: wf.workflow_data?.task || wf.description || wf.name || 'No description',
+          created_at: wf.created_at,
+          completed_at: wf.updated_at,
+          agent_count: agents.length,
+          agent_types: [...new Set(agents.map((a) => a.type || 'unknown'))],
+        };
+      });
       
       setWorkflows(workflowList);
     } catch (err) {
@@ -200,20 +203,17 @@ const WorkflowManagement: React.FC = () => {
       case 'completed':
         return 'success';
       case 'error':
+      case 'failed':
         return 'error';
       default:
         return 'default';
     }
   };
 
-  const getMessageIcon = (source: string) => {
-    if (source === 'user') {
-      return <PersonIcon fontSize="small" color="primary" />;
-    } else if (source === 'unknown' || source === 'system') {
-      return <BotIcon fontSize="small" color="disabled" />;
-    } else {
-      return <BotIcon fontSize="small" color="secondary" />;
-    }
+  const formatAgentName = (id: string): string => {
+    const parts = id.split('_');
+    const cleaned = parts.filter((p) => !/^\d{6,}$/.test(p));
+    return cleaned.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
 
   const formatDateTime = (dateString: string) => {
@@ -297,7 +297,7 @@ const WorkflowManagement: React.FC = () => {
                     />
                   </Box>
                   <Typography variant="caption" color="text.secondary">
-                    {workflow.agent_count} agents
+                    {workflow.agent_count} agent{workflow.agent_count !== 1 ? 's' : ''}
                   </Typography>
                 </Box>
 
@@ -305,10 +305,15 @@ const WorkflowManagement: React.FC = () => {
                   {workflow.id}
                 </Typography>
 
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, fontSize: '1rem' }}>
-                  Task
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {workflow.agent_types.length > 0 && (
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1.5 }}>
+                    {workflow.agent_types.map((t) => (
+                      <Chip key={t} label={formatAgentName(t)} size="small" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600, bgcolor: 'rgba(26,43,74,0.06)' }} />
+                    ))}
+                  </Box>
+                )}
+
+                <Typography variant="body2" sx={{ mb: 2, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', color: '#2d3748', lineHeight: 1.6 }}>
                   {workflow.task}
                 </Typography>
 
@@ -402,98 +407,34 @@ const WorkflowManagement: React.FC = () => {
           {selectedWorkflow ? (
             <Box>
               {selectedWorkflow.status === 'error' && selectedWorkflow.error && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Workflow Error
-                  </Typography>
-                  <Typography variant="body2">
-                    {selectedWorkflow.error}
-                  </Typography>
+                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                  {selectedWorkflow.error}
                 </Alert>
               )}
 
-              {selectedWorkflow.result?.messages && selectedWorkflow.result.messages.length > 0 && (
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                    Conversation Flow ({selectedWorkflow.result.messages.length} messages)
-                  </Typography>
-                  
-                  <Stack spacing={2}>
-                    {selectedWorkflow.result.messages.map((message, index) => {
-                      // Filter out raw result messages
-                      if (message.source === 'unknown' && message.content.includes('messages=[')) {
-                        return null;
-                      }
+              {selectedWorkflow.result?.messages && selectedWorkflow.result.messages.length > 0 ? (
+                <Stack spacing={2}>
+                  {selectedWorkflow.result.messages.map((message, index) => {
+                    // Filter out raw result messages
+                    if (message.source === 'unknown' && message.content.includes('messages=[')) {
+                      return null;
+                    }
 
-                      return (
-                        <Accordion key={index} sx={{ borderRadius: 2, '&:before': { display: 'none' } }}>
-                          <AccordionSummary 
-                            expandIcon={<ExpandMoreIcon />}
-                            sx={{ 
-                              borderRadius: 2,
-                              '& .MuiAccordionSummary-content': { alignItems: 'center' }
-                            }}
-                          >
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
-                              {getMessageIcon(message.source)}
-                              <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
-                                {message.source === 'user' ? 'User Input' : 
-                                 message.source === 'system' ? 'System' :
-                                 `Agent: ${message.source}`}
-                              </Typography>
-                              <Chip
-                                label={message.type || 'TextMessage'}
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                              />
-                              {message.models_usage && (
-                                <Chip
-                                  label={`${message.models_usage.prompt_tokens || 0}→${message.models_usage.completion_tokens || 0} tokens`}
-                                  size="small"
-                                  variant="outlined"
-                                  color="secondary"
-                                />
-                              )}
-                            </Box>
-                          </AccordionSummary>
-                          <AccordionDetails sx={{ pt: 0 }}>
-                            <Divider sx={{ mb: 2 }} />
-                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-                              {typeof message.content === 'string' 
-                                ? message.content 
-                                : JSON.stringify(message.content, null, 2)
-                              }
-                            </Typography>
-                            {message.models_usage && (
-                              <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                                  Token Usage:
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                  Prompt: {message.models_usage.prompt_tokens || 0} • 
-                                  Completion: {message.models_usage.completion_tokens || 0} • 
-                                  Total: {(message.models_usage.prompt_tokens || 0) + (message.models_usage.completion_tokens || 0)}
-                                </Typography>
-                              </Box>
-                            )}
-                          </AccordionDetails>
-                        </Accordion>
-                      );
-                    })}
-                  </Stack>
+                    const agentName = formatAgentName(message.source || 'Agent');
+                    const isLast = index === selectedWorkflow.result!.messages.length - 1;
 
-                  {selectedWorkflow.result.stop_reason && (
-                    <Box sx={{ mt: 3, p: 2, bgcolor: 'success.light', borderRadius: 2 }}>
-                      <Typography variant="subtitle2" color="success.dark" sx={{ fontWeight: 600 }}>
-                        Completion Reason: {selectedWorkflow.result.stop_reason}
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              )}
-
-              {(!selectedWorkflow.result?.messages || selectedWorkflow.result.messages.length === 0) && (
+                    return (
+                      <MessageCard
+                        key={index}
+                        agentName={agentName}
+                        content={typeof message.content === 'string' ? message.content : JSON.stringify(message.content, null, 2)}
+                        isFinal={isLast}
+                        defaultExpanded={isLast}
+                      />
+                    );
+                  })}
+                </Stack>
+              ) : (
                 <Box sx={{ textAlign: 'center', py: 4 }}>
                   <BotIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
                   <Typography variant="body1" color="text.secondary">
@@ -549,5 +490,115 @@ const WorkflowManagement: React.FC = () => {
     </Box>
   );
 };
+
+// ── Message card with markdown rendering ────────────────────────────────────
+
+const mdStyles = {
+  lineHeight: 1.7,
+  fontSize: '0.84rem',
+  color: '#2d3748',
+  fontFamily: '"DM Sans", system-ui, -apple-system, sans-serif',
+  wordBreak: 'break-word',
+  '& p': { m: 0, mb: 1, '&:last-child': { mb: 0 } },
+  '& strong': { fontWeight: 700, color: '#1a2b4a' },
+  '& h1, & h2, & h3, & h4': {
+    fontFamily: '"Playfair Display", Georgia, serif',
+    color: '#1a2b4a',
+    mt: 1.5,
+    mb: 0.75,
+    fontWeight: 600,
+  },
+  '& h3': { fontSize: '0.95rem' },
+  '& h4': { fontSize: '0.88rem' },
+  '& ul, & ol': { pl: 2.5, my: 0.5 },
+  '& li': { mb: 0.3, fontSize: '0.84rem' },
+  '& a': { color: '#c45d3e', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
+  '& code': {
+    bgcolor: 'rgba(26, 43, 74, 0.06)',
+    px: 0.6,
+    py: 0.15,
+    borderRadius: 0.5,
+    fontSize: '0.78rem',
+    fontFamily: 'monospace',
+  },
+  '& blockquote': {
+    borderLeft: '3px solid #c45d3e',
+    pl: 1.5,
+    ml: 0,
+    color: '#5a6578',
+    fontStyle: 'italic',
+  },
+  '& hr': { border: 'none', borderTop: '1px solid rgba(26,43,74,0.1)', my: 1.5 },
+} as const;
+
+function MessageCard({
+  agentName,
+  content,
+  isFinal,
+  defaultExpanded,
+}: {
+  agentName: string;
+  content: string;
+  isFinal: boolean;
+  defaultExpanded: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        borderRadius: 2.5,
+        border: '1px solid',
+        borderColor: isFinal ? 'rgba(76, 175, 80, 0.3)' : 'rgba(26, 43, 74, 0.08)',
+        bgcolor: isFinal ? 'rgba(76, 175, 80, 0.04)' : 'white',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header */}
+      <Box
+        onClick={() => setExpanded(!expanded)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          px: 2,
+          py: 1.2,
+          cursor: 'pointer',
+          bgcolor: isFinal ? 'rgba(76, 175, 80, 0.08)' : 'rgba(26, 43, 74, 0.03)',
+          borderBottom: expanded ? '1px solid rgba(26, 43, 74, 0.06)' : 'none',
+          '&:hover': { bgcolor: isFinal ? 'rgba(76, 175, 80, 0.12)' : 'rgba(26, 43, 74, 0.05)' },
+        }}
+      >
+        {isFinal ? (
+          <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />
+        ) : (
+          <BotIcon sx={{ fontSize: 16, color: '#5a6578' }} />
+        )}
+        <Typography variant="caption" sx={{ fontWeight: 600, fontSize: '0.72rem', color: '#1a2b4a', flex: 1 }}>
+          {agentName}
+        </Typography>
+        {isFinal && (
+          <Chip label="final output" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 600, bgcolor: 'rgba(76,175,80,0.15)', color: 'success.dark' }} />
+        )}
+        <ExpandMoreIcon
+          sx={{
+            fontSize: 18,
+            color: 'text.secondary',
+            transition: 'transform 0.2s',
+            transform: expanded ? 'rotate(180deg)' : 'none',
+          }}
+        />
+      </Box>
+
+      {/* Content */}
+      <Collapse in={expanded}>
+        <Box sx={{ px: 2, py: 1.5, ...mdStyles }}>
+          <ReactMarkdown>{content}</ReactMarkdown>
+        </Box>
+      </Collapse>
+    </Paper>
+  );
+}
 
 export default WorkflowManagement;
