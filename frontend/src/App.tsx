@@ -92,7 +92,7 @@ function App() {
           <Homepage onGetStarted={handleGetStarted} onViewWorkflows={() => handleNavigateTo('management')} />
         ) : (
           <>
-            <WorkflowBuilder initialTab={workflowBuilderTab} />
+            <WorkflowBuilder initialTab={workflowBuilderTab} onHome={() => setCurrentView('homepage')} />
             <Fab onClick={handleNavigationClick} sx={{
               position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
               bgcolor: '#1a2b4a', color: '#fff', width: 48, height: 48,

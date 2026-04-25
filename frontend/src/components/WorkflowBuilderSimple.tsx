@@ -19,6 +19,7 @@ import {
 import {
   AutoAwesome as BuilderIcon,
   List as ManagementIcon,
+  Home as HomeIcon,
 } from '@mui/icons-material';
 
 import AgentPalette from './AgentPaletteTemp';
@@ -30,9 +31,10 @@ import { createWorkflow, getWorkflowStatus } from '../services/apiTemp';
 
 interface WorkflowBuilderProps {
   initialTab?: number;
+  onHome?: () => void;
 }
 
-const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
+const WorkflowBuilder = ({ initialTab = 0, onHome }: WorkflowBuilderProps) => {
   const [currentTab, setCurrentTab] = useState<number>(initialTab);
   const [workflowStatus, setWorkflowStatus] = useState<string>('idle');
   const [agents, setAgents] = useState<AgentConfig[]>([]);
@@ -228,6 +230,11 @@ const WorkflowBuilder = ({ initialTab = 0 }: WorkflowBuilderProps) => {
           >
             Flowgen
           </Typography>
+          {onHome && (
+            <Button color="inherit" startIcon={<HomeIcon />} onClick={onHome} sx={{ mr: 1 }}>
+              Home
+            </Button>
+          )}
           {currentTab === 0 && (
             <>
               <Button

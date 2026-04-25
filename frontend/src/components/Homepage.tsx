@@ -1,6 +1,5 @@
 import {
   Box,
-  Container,
   Typography,
   Button,
   Paper,
@@ -75,14 +74,15 @@ const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
 
   return (
     <Box sx={{ 
-      width: '100vw', 
+      width: '100%', 
       height: '100vh', 
       overflow: 'auto',
       bgcolor: '#faf8f5',
     }}>
-      {/* Hero Section — Editorial asymmetric layout */}
+      {/* Hero Section */}
       <Box sx={{ 
-        minHeight: { xs: '80vh', md: '90vh' },
+
+        py: { xs: 8, md: 10 },
         display: 'flex',
         alignItems: 'center',
         position: 'relative',
@@ -101,7 +101,7 @@ const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
           display: { xs: 'none', md: 'block' },
         }} />
 
-        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1, px: { xs: 3, md: 4 } }}>
+        <Box sx={{ position: 'relative', zIndex: 1, px: { xs: 3, sm: 5, md: '8%', lg: '10%' }, width: '100%' }}>
           <Box sx={{ 
             display: 'flex', 
             flexDirection: { xs: 'column', md: 'row' },
@@ -235,12 +235,12 @@ const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
               ))}
             </Box>
           </Box>
-        </Container>
+        </Box>
       </Box>
 
       {/* Features Section */}
-      <Box sx={{ py: { xs: 8, md: 12 }, bgcolor: '#ffffff' }}>
-        <Container maxWidth="lg" sx={{ px: { xs: 3, md: 4 } }}>
+      <Box sx={{ py: { xs: 6, md: 10 }, bgcolor: '#ffffff' }}>
+        <Box sx={{ px: { xs: 3, sm: 5, md: '8%', lg: '10%' } }}>
           <Box sx={{ textAlign: 'center', mb: { xs: 6, md: 8 } }}>
             <Typography variant="subtitle2" sx={{ color: '#c45d3e', mb: 1.5 }}>
               CAPABILITIES
@@ -278,63 +278,16 @@ const Homepage = ({ onGetStarted, onViewWorkflows }: HomepageProps) => {
               </Box>
             ))}
           </Box>
-        </Container>
-      </Box>
-
-      {/* CTA Section */}
-      <Box sx={{ py: { xs: 8, md: 10 }, bgcolor: '#1a2b4a' }}>
-        <Container maxWidth="md" sx={{ textAlign: 'center', px: { xs: 3, md: 4 } }}>
-          <Typography variant="h3" sx={{
-            fontSize: { xs: '1.8rem', md: '2.4rem' },
-            color: '#ffffff',
-            mb: 2,
-          }}>
-            Ready to orchestrate?
-          </Typography>
-          <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.65)', mb: 4, maxWidth: 480, mx: 'auto' }}>
-            Create your first multi-agent workflow in minutes. No coding required — just drag, connect, and execute.
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={onGetStarted}
-              startIcon={<PlayIcon />}
-              sx={{
-                py: 1.5, px: 4,
-                fontSize: '0.95rem',
-                bgcolor: '#c45d3e',
-                '&:hover': { bgcolor: '#e07a5f', transform: 'translateY(-1px)' },
-                transition: 'all 0.2s ease',
-              }}
-            >
-              Launch Builder
-            </Button>
-            <Button
-              variant="outlined"
-              size="large"
-              onClick={onViewWorkflows || onGetStarted}
-              sx={{
-                py: 1.5, px: 4,
-                fontSize: '0.95rem',
-                borderColor: 'rgba(255,255,255,0.25)',
-                color: '#ffffff',
-                '&:hover': { borderColor: 'rgba(255,255,255,0.5)', bgcolor: 'rgba(255,255,255,0.05)' },
-              }}
-            >
-              Browse Workflows
-            </Button>
-          </Box>
-        </Container>
+        </Box>
       </Box>
 
       {/* Footer */}
       <Box sx={{ py: 4, bgcolor: '#faf8f5', borderTop: '1px solid rgba(26,43,74,0.06)' }}>
-        <Container maxWidth="lg">
+        <Box sx={{ px: { xs: 3, sm: 5, md: '8%', lg: '10%' } }}>
           <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ fontSize: '0.8rem' }}>
             Flowgen — Powered by Microsoft Agent Framework
           </Typography>
-        </Container>
+        </Box>
       </Box>
     </Box>
   );
