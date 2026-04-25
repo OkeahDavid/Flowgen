@@ -11,7 +11,8 @@ A drag-and-drop interface for building and executing AI agent workflows using Mi
 - **Agent Framework Integration**: Powered by Microsoft's Agent Framework for typed workflow orchestration
 - **PostgreSQL Database**: Persistent storage for workflows, executions, and documents
 - **Material UI Design**: Clean, modern interface built with React and Material UI
-<img width="1914" height="900" alt="image" src="https://github.com/user-attachments/assets/78e0ee4f-af54-413f-b3ee-d9dec6a6bef6" />
+<img width="1913" height="907" alt="image" src="https://github.com/user-attachments/assets/5def9099-624b-4197-86dc-5403ec9014d4" />
+
 
 ## Tech Stack
 
@@ -114,47 +115,9 @@ The frontend will be available at `http://localhost:5173`
 - **Purpose**: Creates concise summaries of provided information
 - **Use Case**: Condensing information from other agents or external sources
 
-
-## Development
-
-### Backend Development
-```bash
-cd backend
-uv run main.py
-```
-
-### Frontend Development
-```bash
-cd frontend
-npm run dev
-```
-
-### Building for Production
-
-#### Backend
-```bash
-cd backend
-uv build
-```
-
-#### Frontend
-```bash
-cd frontend
-npm run build
-```
-
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
